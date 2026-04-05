@@ -12,11 +12,23 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+@theme {
+  --color-primary: #000000;
+  --color-primary-container: #3b3b3b;
+  --color-on-primary: #e2e2e2;
+  --color-surface: #f9f9f9;
+  --color-surface-container: #eeeeee;
+  --color-surface-container-low: #f3f3f3;
+  --color-surface-container-high: #e8e8e8;
+  --color-surface-container-highest: #e2e2e2;
+  --color-surface-container-lowest: #ffffff;
+  --color-on-surface: #1b1b1b;
+  --color-on-surface-variant: #474747;
+  --color-outline: #777777;
+  --color-outline-variant: #c6c6c6;
+  --font-headline: var(--font-space-grotesk), "Space Grotesk", sans-serif;
+  --font-body: var(--font-space-grotesk), "Space Grotesk", sans-serif;
+  --font-label: var(--font-space-grotesk), "Space Grotesk", sans-serif;
 }
 
 body {
@@ -24,3 +36,7 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: #f9f9f9; }
+::-webkit-scrollbar-thumb { background: #000000; }
