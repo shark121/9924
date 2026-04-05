@@ -11,9 +11,9 @@ const PAGE_SIZE = 4;
 
 const filters: { id: "all" | ProductCategory; label: string }[] = [
   { id: "all", label: "ALL_UNITS" },
-  { id: "stretch_knit", label: "STRETCH_KNIT" },
-  { id: "core_struct", label: "CORE_STRUCT" },
-  { id: "off_road_v1", label: "OFF_ROAD_V1" },
+  { id: "polo", label: "POLO" },
+  { id: "track_suit", label: "TRACK_SUIT" },
+  { id: "rugby_shirt", label: "RUGBY_SHIRT" },
 ];
 
 export default function StorePage() {
