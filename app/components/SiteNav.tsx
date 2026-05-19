@@ -33,7 +33,7 @@ export default function SiteNav() {
           href="/store"
           className="text-base sm:text-lg md:text-2xl font-black text-black font-headline tracking-tight uppercase hover:opacity-70 transition-opacity"
         >
-          FOOTWEAR MANIFESTO
+          9924
         </Link>
 
         <div className="hidden md:flex gap-12 font-label tracking-tight uppercase">

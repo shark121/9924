@@ -4,7 +4,7 @@ import ParticleLogo from "./components/ParticleLogo";
 
 export default function Home() {
   return (
-    <div className="relative h-screen w-screen overflow-hidden bg-white">
+    <div className="relative h-[100svh] w-screen overflow-hidden bg-white">
       {/* Full-viewport particle canvas */}
       <ParticleLogo
         src={encodeURI("/logos/9924 logo 3 -black@4x.png")}
@@ -25,7 +25,10 @@ export default function Home() {
       </nav>
 
       {/* Enter Store overlay */}
-      <div className="absolute bottom-10 sm:bottom-14 left-0 right-0 flex items-center justify-center z-20 pointer-events-none">
+      <div
+        className="absolute bottom-20 sm:bottom-14 left-0 right-0 flex items-center justify-center z-20 pointer-events-none"
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      >
         <Link
           href="/store"
           className="text-xs font-bold uppercase tracking-[0.2em] text-neutral-500 hover:text-black transition-colors pointer-events-auto"

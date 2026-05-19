@@ -46,7 +46,7 @@ export default function CheckoutPage() {
       <header className="w-full px-4 sm:px-6 md:px-12 py-6 md:py-8 bg-surface flex justify-center items-center">
         <Link href="/store">
           <h1 className="text-2xl md:text-3xl font-bold tracking-tighter text-black font-headline hover:opacity-70 transition-opacity">
-            MANIFESTO
+            9924
           </h1>
         </Link>
       </header>

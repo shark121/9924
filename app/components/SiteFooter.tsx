@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 const SOCIALS = [
   {
     label: "Instagram",
@@ -31,22 +33,29 @@ const SOCIALS = [
   },
 ];
 
+const LINKS: { label: string; href: string }[] = [
+  { label: "TERMS", href: "/terms" },
+  { label: "SHIPPING", href: "/shipping" },
+  { label: "PRIVACY", href: "/privacy" },
+  { label: "CONTACT", href: "/contact" },
+];
+
 export default function SiteFooter() {
   return (
     <footer className="bg-neutral-100 py-10 md:py-16">
       <div className="flex flex-col md:flex-row justify-between items-center gap-6 md:gap-0 px-4 sm:px-6 md:px-12 w-full max-w-[1920px] mx-auto text-center md:text-left">
         <div className="text-base md:text-lg font-bold text-black font-headline uppercase">
-          INDUSTRIAL FOOTWEAR DIV
+          9924
         </div>
         <div className="flex flex-wrap items-center justify-center gap-6 md:gap-12 font-label text-[10px] tracking-widest uppercase">
-          {["TERMS", "SHIPPING", "PRIVACY", "CONTACT"].map((link) => (
-            <a
-              key={link}
-              href="#"
+          {LINKS.map((link) => (
+            <Link
+              key={link.label}
+              href={link.href}
               className="text-neutral-400 hover:text-black transition-all"
             >
-              {link}
-            </a>
+              {link.label}
+            </Link>
           ))}
           {SOCIALS.map((s) => (
             <a
@@ -61,8 +70,8 @@ export default function SiteFooter() {
             </a>
           ))}
         </div>
-        <div className="font-label text-[10px] tracking-widest uppercase text-neutral-400">
-          ©2026 INDUSTRIAL FOOTWEAR DIVISION. ALL RIGHTS RESERVED.
+        <div className="font-label text-[10px] tracking-widest uppercase text-neutral-400 text-center md:text-right md:max-w-[280px] leading-relaxed">
+          © 2026 9924. OPERATED BY AHYENSODE CREATIVE AGENCY. ALL RIGHTS RESERVED.
         </div>
       </div>
     </footer>
