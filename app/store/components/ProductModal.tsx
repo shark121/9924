@@ -55,13 +55,14 @@ export default function ProductModal({ product, onClose }: ProductModalProps) {
         >
           <button
             onClick={onClose}
-            className="absolute top-6 right-6 z-50 text-black hover:opacity-50 transition-opacity"
+            className="fixed md:absolute top-4 right-4 sm:top-6 sm:right-6 z-50 text-black hover:opacity-50 transition-opacity bg-[#f9f9f9]/80 md:bg-transparent rounded-full p-2 md:p-0"
+            aria-label="Close"
           >
             <X className="w-5 h-5" />
           </button>
 
           {/* Left: Image Canvas */}
-          <div className="relative w-full md:w-2/3 h-[60vh] md:h-screen bg-surface-container-low flex items-center justify-center overflow-hidden select-none">
+          <div className="relative w-full md:w-2/3 h-[55vh] sm:h-[60vh] md:h-screen bg-surface-container-low flex items-center justify-center overflow-hidden select-none shrink-0">
             <AnimatePresence mode="popLayout">
               <motion.div
                 key={currentImageIdx}
@@ -75,7 +76,7 @@ export default function ProductModal({ product, onClose }: ProductModalProps) {
                   src={product.images[currentImageIdx]}
                   alt={`${product.name} — view ${currentImageIdx + 1}`}
                   fill
-                  className="object-contain mix-blend-multiply p-16"
+                  className="object-contain mix-blend-multiply p-8 sm:p-12 md:p-16"
                   priority
                 />
               </motion.div>
@@ -83,25 +84,27 @@ export default function ProductModal({ product, onClose }: ProductModalProps) {
 
             {/* Prev / Next */}
             {product.images.length > 1 && (
-              <div className="absolute inset-0 flex items-center justify-between px-4 pointer-events-none">
+              <div className="absolute inset-0 flex items-center justify-between px-2 sm:px-4 pointer-events-none">
                 <button
                   onClick={prev}
-                  className="pointer-events-auto p-4 text-black hover:opacity-50 transition-opacity"
+                  className="pointer-events-auto p-3 sm:p-4 text-black hover:opacity-50 transition-opacity"
+                  aria-label="Previous image"
                 >
-                  <ChevronLeft className="w-6 h-6" />
+                  <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6" />
                 </button>
                 <button
                   onClick={next}
-                  className="pointer-events-auto p-4 text-black hover:opacity-50 transition-opacity"
+                  className="pointer-events-auto p-3 sm:p-4 text-black hover:opacity-50 transition-opacity"
+                  aria-label="Next image"
                 >
-                  <ChevronRight className="w-6 h-6" />
+                  <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6" />
                 </button>
               </div>
             )}
 
             {/* Dot indicators */}
             {product.images.length > 1 && (
-              <div className="absolute bottom-6 left-0 right-0 flex justify-center gap-2">
+              <div className="absolute bottom-4 sm:bottom-6 left-0 right-0 flex justify-center gap-2">
                 {product.images.map((_, i) => (
                   <button
                     key={i}
@@ -109,6 +112,7 @@ export default function ProductModal({ product, onClose }: ProductModalProps) {
                     className={`w-1.5 h-1.5 rounded-full transition-all duration-200 ${
                       i === currentImageIdx ? "bg-black scale-125" : "bg-black/25 hover:bg-black/50"
                     }`}
+                    aria-label={`Go to image ${i + 1}`}
                   />
                 ))}
               </div>
@@ -116,29 +120,26 @@ export default function ProductModal({ product, onClose }: ProductModalProps) {
           </div>
 
           {/* Right: Product Details */}
-          <div className="w-full md:w-1/3 min-h-[40vh] md:h-screen bg-[#f9f9f9] p-8 md:p-16 flex flex-col justify-center border-l border-black/5">
+          <div className="w-full md:w-1/3 md:h-screen bg-[#f9f9f9] p-6 sm:p-8 md:p-12 lg:p-16 flex flex-col justify-center border-t md:border-t-0 md:border-l border-black/5">
             <motion.div
               initial={{ y: 16, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ delay: 0.15, duration: 0.4 }}
             >
-              <span className="font-label text-[9px] tracking-[0.3em] uppercase text-neutral-400 mb-4 block">
-                ID: {product.sku}
-              </span>
-              <h1 className="font-headline text-3xl font-black uppercase tracking-tight mb-2">
+              <h1 className="font-headline text-2xl sm:text-3xl font-black uppercase tracking-tight mb-2">
                 {product.name}
               </h1>
-              <p className="font-headline font-bold text-xl mb-8">
+              <p className="font-headline font-bold text-lg sm:text-xl mb-6 sm:mb-8">
                 ${product.price.toFixed(2)}
               </p>
 
-              <p className="font-body text-sm text-on-surface-variant mb-10 max-w-sm leading-relaxed">
+              <p className="font-body text-sm text-on-surface-variant mb-8 sm:mb-10 max-w-sm leading-relaxed">
                 {product.description}
               </p>
 
-              <div className="mb-8">
-                <div className="font-label text-[9px] font-black uppercase tracking-[0.3em] mb-4 text-neutral-500">
-                  SELECT_SIZE
+              <div className="mb-6 sm:mb-8">
+                <div className="font-label text-[9px] font-black uppercase tracking-[0.3em] mb-3 sm:mb-4 text-neutral-500">
+                  SELECT SIZE
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {product.sizes.map((size) => (
@@ -160,9 +161,9 @@ export default function ProductModal({ product, onClose }: ProductModalProps) {
               <button
                 onClick={handleAddToCart}
                 disabled={!selectedSize}
-                className="w-full bg-primary text-on-primary py-5 font-headline font-bold uppercase tracking-widest text-sm transition-all hover:bg-primary-container disabled:opacity-40 disabled:cursor-not-allowed"
+                className="w-full bg-primary text-on-primary py-4 sm:py-5 font-headline font-bold uppercase tracking-widest text-sm transition-all hover:bg-primary-container disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                {selectedSize ? "ADD_TO_CART" : "SELECT_SIZE"}
+                {selectedSize ? "ADD TO CART" : "SELECT SIZE"}
               </button>
 
               {/* Image counter */}

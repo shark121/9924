@@ -31,9 +31,9 @@ export default function CartDrawer() {
             className="fixed top-0 right-0 h-full w-full max-w-md bg-[#f9f9f9] z-50 flex flex-col pt-20 border-l border-black/5"
           >
             {/* Header */}
-            <div className="absolute top-0 left-0 w-full flex items-center justify-between px-8 py-6 bg-[#f9f9f9] z-10 border-b border-black/5">
+            <div className="absolute top-0 left-0 w-full flex items-center justify-between px-5 sm:px-8 py-5 sm:py-6 bg-[#f9f9f9] z-10 border-b border-black/5">
               <h2 className="font-label text-[10px] font-black uppercase tracking-[0.3em]">
-                CART_CONTENTS
+                CART CONTENTS
               </h2>
               <button
                 onClick={closeCart}
@@ -44,11 +44,11 @@ export default function CartDrawer() {
             </div>
 
             {/* Items */}
-            <div className="flex-1 overflow-y-auto px-8 py-6 flex flex-col gap-8">
+            <div className="flex-1 overflow-y-auto px-5 sm:px-8 py-6 flex flex-col gap-6 sm:gap-8">
               {items.length === 0 ? (
                 <div className="flex-1 flex items-center justify-center">
                   <span className="font-label text-[10px] text-neutral-400 uppercase tracking-[0.3em]">
-                    NO_UNITS_SELECTED
+                    COMING SOON
                   </span>
                 </div>
               ) : (
@@ -128,7 +128,7 @@ export default function CartDrawer() {
 
             {/* Footer */}
             {items.length > 0 && (
-              <div className="border-t border-black/5 px-8 py-6 bg-[#f9f9f9]">
+              <div className="border-t border-black/5 px-5 sm:px-8 py-5 sm:py-6 bg-[#f9f9f9]">
                 <div className="flex items-center justify-between mb-6">
                   <span className="font-label text-[10px] font-black uppercase tracking-[0.3em]">
                     SUBTOTAL
