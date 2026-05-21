@@ -31,7 +31,7 @@ export default function Home() {
       >
         <Link
           href="/store"
-          className="text-xs font-bold uppercase tracking-[0.2em] text-neutral-500 hover:text-black transition-colors pointer-events-auto"
+          className="text-sm sm:text-base font-black uppercase tracking-[0.25em] text-black border border-black px-6 py-3 hover:bg-black hover:text-white transition-colors pointer-events-auto"
         >
           Enter Store
         </Link>

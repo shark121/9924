@@ -132,19 +132,16 @@ export default function StorePage() {
         )}
 
         {/* Load More */}
-        <div className="mt-16 md:mt-32 flex flex-col items-center gap-6 text-center">
-          {hasMore && (
+        {hasMore && (
+          <div className="mt-16 md:mt-32 flex flex-col items-center gap-6 text-center">
             <button
               onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
               className="bg-primary text-on-primary px-8 sm:px-12 py-4 sm:py-5 text-xs sm:text-sm font-headline font-bold uppercase tracking-widest hover:bg-primary-container transition-colors"
             >
               LOAD MORE UNITS
             </button>
-          )}
-          <span className="font-label text-[10px] tracking-widest text-neutral-400">
-            SCANNING DATABASE [{visible.length} / {filtered.length} UNITS RECOVERED]
-          </span>
-        </div>
+          </div>
+        )}
       </main>
 
       <div className="mt-16 md:mt-32">

@@ -24,7 +24,13 @@ export default function ParticleLogo({
     if (!container) return;
 
     const isMobile = window.innerWidth <= 768;
-    const PARTICLE_COUNT = particleCount ?? (isMobile ? 25000 : 60000);
+    const screenArea = window.innerWidth * window.innerHeight;
+    const baseArea = 1920 * 1080;
+    const densityScale = isMobile
+      ? 1
+      : Math.min(2.5, Math.max(1, screenArea / baseArea));
+    const baseCount = isMobile ? 25000 : 60000;
+    const PARTICLE_COUNT = particleCount ?? Math.round(baseCount * densityScale);
 
     let width = container.clientWidth;
     let height = container.clientHeight;
@@ -227,19 +233,6 @@ export default function ParticleLogo({
       });
     }
 
-    const mouse = { x: -999, y: -999, sx: -999, sy: -999 };
-    function handleMouseMove(e: MouseEvent) {
-      const rect = renderer.domElement.getBoundingClientRect();
-      mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-      mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-    }
-    function handleMouseLeave() {
-      mouse.x = -999;
-      mouse.y = -999;
-    }
-    renderer.domElement.addEventListener("mousemove", handleMouseMove);
-    renderer.domElement.addEventListener("mouseleave", handleMouseLeave);
-
     let resizeRO: ResizeObserver | null = null;
     if (typeof ResizeObserver !== "undefined") {
       resizeRO = new ResizeObserver(() => {
@@ -261,9 +254,6 @@ export default function ParticleLogo({
       rafId = requestAnimationFrame(animate);
       const t = clock.getElapsedTime();
 
-      mouse.sx += (mouse.x - mouse.sx) * 0.25;
-      mouse.sy += (mouse.y - mouse.sy) * 0.25;
-
       const posArr = geometry.attributes.position.array as Float32Array;
 
       for (let i = 0; i < PARTICLE_COUNT; i++) {
@@ -275,23 +265,13 @@ export default function ParticleLogo({
         velocities[i3 + 1] += dy * 0.03;
         velocities[i3 + 2] += dz * 0.03;
 
-        if (logoPositions && mouse.x > -990) {
-          // Visible half-extent at z=0 with z=14, fov=50: tan(25°)*14 ≈ 6.53
-          const mx = mouse.sx * 6.53;
-          const my = mouse.sy * 6.53;
-          const distX = posArr[i3] - mx;
-          const distY = posArr[i3 + 1] - my;
-          const distSq = distX * distX + distY * distY;
-          if (distSq < 16.0) {
-            const force = (16.0 - distSq) * 0.0025;
-            velocities[i3] += distX * force;
-            velocities[i3 + 1] += distY * force;
-            velocities[i3 + 2] += (Math.random() - 0.5) * force;
-          }
+        // Slow ambient distortion — drifting waves across the logo.
+        if (logoPositions) {
+          velocities[i3] +=
+            Math.sin(t * 0.35 + posArr[i3 + 1] * 0.2) * 0.0006;
+          velocities[i3 + 1] +=
+            Math.cos(t * 0.3 + posArr[i3] * 0.2) * 0.0006;
         }
-
-        velocities[i3] += Math.sin(t * 0.5 + posArr[i3] * 0.3) * 0.00008;
-        velocities[i3 + 1] += Math.cos(t * 0.5 + posArr[i3 + 1] * 0.3) * 0.00008;
 
         velocities[i3] *= 0.85;
         velocities[i3 + 1] *= 0.85;
@@ -343,8 +323,6 @@ export default function ParticleLogo({
       cancelled = true;
       cancelAnimationFrame(rafId);
       resizeRO?.disconnect();
-      renderer.domElement.removeEventListener("mousemove", handleMouseMove);
-      renderer.domElement.removeEventListener("mouseleave", handleMouseLeave);
       gsap.killTweensOf(camera.position);
       gsap.killTweensOf(particleMat.uniforms.uOpacity);
       gsap.killTweensOf(morphProgress);

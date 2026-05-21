@@ -8,10 +8,10 @@ import { Menu, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
 const navLinks = [
-  { label: "ARCHIVE", href: "/archive" },
   { label: "LATEST", href: "/store" },
   { label: "COLLECTIONS", href: "/collections" },
-  { label: "ABOUT", href: "#" },
+  { label: "ABOUT", href: "/about" },
+  { label: "ARCHIVE", href: "/archive" },
 ];
 
 export default function SiteNav() {
@@ -31,9 +31,17 @@ export default function SiteNav() {
       <div className="flex justify-between items-center w-full px-4 sm:px-6 md:px-12 py-4 md:py-6 max-w-[1920px] mx-auto">
         <Link
           href="/store"
-          className="text-base sm:text-lg md:text-2xl font-black text-black font-headline tracking-tight uppercase hover:opacity-70 transition-opacity"
+          aria-label="9924"
+          className="block hover:opacity-70 transition-opacity"
         >
-          9924
+          <Image
+            src="/logos/9924 logo 1 -black@4x (1).png"
+            alt="9924"
+            width={200}
+            height={80}
+            className="h-auto w-auto max-w-[50px] sm:max-w-[60px] md:max-w-[70px]"
+            priority
+          />
         </Link>
 
         <div className="hidden md:flex gap-12 font-label tracking-tight uppercase">
@@ -62,7 +70,7 @@ export default function SiteNav() {
             aria-label="Shopping bag"
           >
             <Image
-              src="/ghana-must-go.png"
+              src="/ghana-must-go-red.png"
               alt=""
               width={48}
               height={48}
