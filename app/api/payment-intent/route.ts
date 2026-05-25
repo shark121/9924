@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server";
-import { stripe } from "@/lib/stripe";
+import { getStripe } from "@/lib/stripe";
 import { products } from "@/lib/data";
+
+export const dynamic = "force-dynamic";
 
 const TAX_RATE = 0.08;
 
@@ -42,7 +44,7 @@ export async function POST(request: NextRequest) {
   const taxCents = Math.round(subtotalCents * TAX_RATE);
   const totalCents = subtotalCents + taxCents;
 
-  const intent = await stripe.paymentIntents.create({
+  const intent = await getStripe().paymentIntents.create({
     amount: totalCents,
     currency: "usd",
     automatic_payment_methods: { enabled: true },
