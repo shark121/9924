@@ -47,10 +47,10 @@ export default function SiteFooter() {
       <div className="flex flex-col md:flex-row justify-between items-center gap-6 md:gap-0 px-4 sm:px-6 md:px-12 w-full max-w-[1920px] mx-auto text-center md:text-left">
         <Link href="/" aria-label="9924" className="block hover:opacity-70 transition-opacity">
           <Image
-            src="/logos/9924 logo 1 -black@4x (1).png"
+            src="/logos/9924 logo 3 -black@4x.png"
             alt="9924"
             width={200}
-            height={80}
+            height={200}
             className="h-auto w-auto max-w-[50px] sm:max-w-[60px] md:max-w-[70px]"
           />
         </Link>
