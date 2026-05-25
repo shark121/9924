@@ -30,7 +30,7 @@ export default function SiteNav() {
     <nav className="bg-neutral-50 fixed top-0 z-50 w-full">
       <div className="flex justify-between items-center w-full px-4 sm:px-6 md:px-12 py-4 md:py-6 max-w-[1920px] mx-auto">
         <Link
-          href="/store"
+          href="/"
           aria-label="9924"
           className="block hover:opacity-70 transition-opacity"
         >

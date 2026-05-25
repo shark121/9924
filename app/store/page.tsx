@@ -89,7 +89,6 @@ export default function StorePage() {
               {f.label}
             </button>
           ))}
-          <div className="hidden md:block ml-auto text-neutral-400">DISPLAY: 4 COLUMN GRID</div>
         </div>
 
         {/* Product Grid */}

@@ -45,7 +45,7 @@ export const products: Product[] = [
     description:
       "Matte black modular high-top with dual-density sole architecture. Laser-etched traction grid. Ripstop polymer upper with sealed seam construction.",
     images: [IMG.white_front, IMG.white_back],
-    sizes: ["7", "8", "9", "10", "11", "12"],
+    sizes: ["S", "M", "L", "XL"],
     category: "polo",
     collection: "REPUBLIC_SERIES",
   },
@@ -57,7 +57,7 @@ export const products: Product[] = [
     description:
       "Clinical white low-profile silhouette. Transparent polymer accent panels. Technical speed-lacing system with heat-bonded overlays.",
     images: [IMG.black_front, IMG.black_back],
-    sizes: ["7", "8", "9", "10", "11", "12"],
+    sizes: ["S", "M", "L", "XL"],
     category: "polo",
     collection: "REPUBLIC_SERIES",
   },

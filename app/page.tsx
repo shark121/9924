@@ -9,7 +9,7 @@ export default function Home() {
       <ParticleLogo
         src={encodeURI("/logos/9924 logo 3 -black@4x.png")}
         sizeFactor={0.7}
-        className="absolute inset-0 w-full h-full z-0"
+        className="absolute inset-0 m-auto w-full h-full md:w-[850px] md:h-[850px] z-0"
       />
 
       {/* Navigation overlay */}

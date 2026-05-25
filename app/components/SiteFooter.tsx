@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 
 const SOCIALS = [
   {
@@ -44,9 +45,15 @@ export default function SiteFooter() {
   return (
     <footer className="bg-neutral-100 py-10 md:py-16">
       <div className="flex flex-col md:flex-row justify-between items-center gap-6 md:gap-0 px-4 sm:px-6 md:px-12 w-full max-w-[1920px] mx-auto text-center md:text-left">
-        <div className="text-base md:text-lg font-bold text-black font-headline uppercase">
-          9924
-        </div>
+        <Link href="/" aria-label="9924" className="block hover:opacity-70 transition-opacity">
+          <Image
+            src="/logos/9924 logo 1 -black@4x (1).png"
+            alt="9924"
+            width={200}
+            height={80}
+            className="h-auto w-auto max-w-[50px] sm:max-w-[60px] md:max-w-[70px]"
+          />
+        </Link>
         <div className="flex flex-wrap items-center justify-center gap-6 md:gap-12 font-label text-[10px] tracking-widest uppercase">
           {LINKS.map((link) => (
             <Link
