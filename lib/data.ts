@@ -40,10 +40,10 @@ export const products: Product[] = [
   {
     id: "prod_01",
     sku: "0101-BLK-24",
-    name: "YS-01 / STEALTH",
-    price: 420,
+    name: "PG-01 / GOLD COAST",
+    price: 70,
     description:
-      "Matte black modular high-top with dual-density sole architecture. Laser-etched traction grid. Ripstop polymer upper with sealed seam construction.",
+      "Inspired by home, worn everywhere. A collectible football polo representing movement, identity and culture.",
     images: [IMG.white_front, IMG.white_back],
     sizes: ["S", "M", "L", "XL"],
     category: "polo",
@@ -52,8 +52,8 @@ export const products: Product[] = [
   {
     id: "prod_02",
     sku: "0102-WHT-24",
-    name: "YS-01 / CLINICAL",
-    price: 420,
+    name: "PG-02 / GOLD COAST",
+    price: 70,
     description:
       "Clinical white low-profile silhouette. Transparent polymer accent panels. Technical speed-lacing system with heat-bonded overlays.",
     images: [IMG.black_front, IMG.black_back],

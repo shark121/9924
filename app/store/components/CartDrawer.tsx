@@ -28,7 +28,7 @@ export default function CartDrawer() {
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
             transition={{ type: "spring", damping: 30, stiffness: 250 }}
-            className="fixed top-0 right-0 h-full w-full max-w-md bg-[#f9f9f9] z-50 flex flex-col pt-20 border-l border-black/5"
+            className="fixed top-0 right-0 h-full w-full sm:max-w-md bg-[#f9f9f9] z-50 flex flex-col pt-20 border-l border-black/5"
           >
             {/* Header */}
             <div className="absolute top-0 left-0 w-full flex items-center justify-between px-5 sm:px-8 py-5 sm:py-6 bg-[#f9f9f9] z-10 border-b border-black/5">
