@@ -18,9 +18,9 @@ const COLLECTION_META: Record<
   { subtitle: string; description: string; year: string }
 > = {
   REPUBLIC_SERIES: {
-    subtitle: "THE OSAGYEFO EDIT",
+    subtitle: "PHASE 01 / LIMITED RELEASE / 2026",
     description:
-      "The Baker Boy Polo is more than a garment — it is a symbol of vision, leadership, and cultural pride. Featuring a bold tribute to Kwame Nkrumah, this piece draws from the spirit of independence and the courage to define a new path. Paired with the signature Baker Boy logo, the design reflects resilience unfading, unshaken, and built to endure. Designed for those who understand that legacy is not inherited but carried, The Osagyefo Edit blends history with modern identity in a form that speaks without permission. This is not just a drop. It's a statement. Limited release.",
+      "An evolving collection inspired by football culture, movement and modern identity. The Republic Series brings together timeless silhouettes, refined sportswear influences and contemporary essentials designed for everyday wear. Created to move across cities, seasons and generations. Limited release.",
     year: "2026",
   },
 };

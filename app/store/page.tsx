@@ -54,21 +54,21 @@ export default function StorePage() {
           <div className="flex flex-col md:flex-row justify-between md:items-end gap-8 border-b border-black/5 pb-8 md:pb-12">
             <div className="max-w-2xl">
               <span className="font-label text-[10px] sm:text-xs tracking-[0.3em] uppercase text-neutral-400 mb-3 sm:mb-4 block">
-                THE OSAGYEFO EDIT
+                PHASE 01 / LIMITED RELEASE / 2026
               </span>
               <h1 className="font-headline text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-black tracking-tighter leading-[0.9] uppercase text-primary mb-6 md:mb-8">
                 REPUBLIC<br />SERIES
               </h1>
               <p className="font-body text-base md:text-lg leading-relaxed text-on-surface-variant max-w-lg">
-                The Baker Boy Polo is more than a garment — it is a symbol of vision, leadership, and cultural pride. Featuring a bold tribute to Kwame Nkrumah, this piece draws from the spirit of independence and the courage to define a new path. Limited release.
+                An evolving collection inspired by football culture, movement and modern identity. The Republic Series brings together timeless silhouettes, refined sportswear influences and contemporary essentials designed for everyday wear. Created to move across cities, seasons and generations. Limited release.
               </p>
             </div>
             <div className="text-right hidden md:block">
               <div className="font-label text-xs tracking-widest text-neutral-500 mb-2 uppercase">
                 Drop Info
               </div>
-              <div className="font-label text-sm font-bold uppercase">Legacy is not inherited</div>
-              <div className="font-label text-sm font-bold uppercase">but carried</div>
+              <div className="font-label text-sm font-bold uppercase">The Republic Series</div>
+              <div className="font-label text-sm font-bold uppercase">Phase 01</div>
               <div className="font-label text-sm font-bold uppercase">Limited Release / 2026</div>
             </div>
           </div>

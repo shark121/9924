@@ -126,9 +126,12 @@ export default function ParticleLogo({
     }
 
     for (let i = 0; i < PARTICLE_COUNT; i++) {
-      positions[i * 3] = (Math.random() - 0.5) * 50;
-      positions[i * 3 + 1] = (Math.random() - 0.5) * 50;
-      positions[i * 3 + 2] = (Math.random() - 0.5) * 50;
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.acos(2 * Math.random() - 1);
+      const r = 40 + Math.random() * 40;
+      positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+      positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+      positions[i * 3 + 2] = r * Math.cos(phi);
       colors[i * 3] = 0.1;
       colors[i * 3 + 1] = 0.1;
       colors[i * 3 + 2] = 0.1;
@@ -308,8 +311,8 @@ export default function ParticleLogo({
       });
       gsap.to(particleMat.uniforms.uOpacity, {
         value: 1.0,
-        duration: 1.5,
-        delay: 0.3,
+        duration: 1.0,
+        delay: 1.0,
       });
       gsap.to(morphProgress, {
         value: 1.0,
