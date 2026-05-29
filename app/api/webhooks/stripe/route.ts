@@ -28,20 +28,24 @@ export async function POST(request: NextRequest) {
   }
 
   switch (event.type) {
-    case "payment_intent.succeeded": {
-      const pi = event.data.object;
-      // TODO: persist order to DB when one exists
-      console.log("[stripe] paid", {
-        id: pi.id,
-        amount: pi.amount,
-        email: pi.receipt_email,
-        items: pi.metadata?.items,
-      });
+    case "checkout.session.completed": {
+      const session = event.data.object;
+      // payment_status is "paid" for card; may be "unpaid"/"no_payment_required"
+      // for async methods — only fulfill when actually paid.
+      if (session.payment_status === "paid") {
+        // TODO: persist order to DB when one exists
+        console.log("[stripe] checkout completed", {
+          id: session.id,
+          amount: session.amount_total,
+          email: session.customer_details?.email,
+          items: session.metadata?.items,
+        });
+      }
       break;
     }
-    case "payment_intent.payment_failed": {
-      const pi = event.data.object;
-      console.warn("[stripe] failed", { id: pi.id, error: pi.last_payment_error?.message });
+    case "checkout.session.async_payment_failed": {
+      const session = event.data.object;
+      console.warn("[stripe] async payment failed", { id: session.id });
       break;
     }
   }

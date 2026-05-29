@@ -28,7 +28,9 @@ export default function ProductModal({ product, onClose }: ProductModalProps) {
     if (!product || !selectedSize) return;
     addItem(product, selectedSize);
     onClose();
-    setTimeout(() => openCart(), 300);
+    // Auto-open the cart on desktop only; on mobile it must be tapped open.
+    const isDesktop = window.matchMedia("(min-width: 768px)").matches;
+    if (isDesktop) setTimeout(() => openCart(), 300);
   };
 
   const next = (e: React.MouseEvent) => {
