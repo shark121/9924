@@ -62,8 +62,9 @@ export default function CheckoutForm() {
   const [ratesLoading, setRatesLoading] = useState(false);
   const [ratesError, setRatesError] = useState<string | null>(null);
 
-  const addressInputRef = useRef<HTMLInputElement>(null);
+  const addressSlotRef = useRef<HTMLDivElement>(null);
   const placesStarted = useRef(false);
+  const [placesReady, setPlacesReady] = useState(false);
 
   const subtotal = getCartTotal();
   const taxRate = 0.08;
@@ -97,9 +98,15 @@ export default function CheckoutForm() {
   });
 
   // ---- Google Places autocomplete on the address line --------------------
+  // Uses the modern PlaceAutocompleteElement web component. The legacy
+  // `Autocomplete` widget (deprecated March 2025) attached to our controlled
+  // <input> and blurred it on attach — closing the mobile keyboard mid-word.
+  // This element owns its own input inside a shadow root, so there's no focus
+  // fight. Requires "Places API (New)" enabled on the GCP project.
   useEffect(() => {
     const key = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-    if (!key || placesStarted.current || !addressInputRef.current) return;
+    const slot = addressSlotRef.current;
+    if (!key || placesStarted.current || !slot) return;
     placesStarted.current = true;
 
     // Google reports key/referrer auth failures (e.g. RefererNotAllowedMapError)
@@ -115,42 +122,44 @@ export default function CheckoutForm() {
       };
 
     setOptions({ key, v: "weekly" });
+
+    let el: google.maps.places.PlaceAutocompleteElement | null = null;
+
     importLibrary("places")
       .then((places) => {
-        const input = addressInputRef.current;
-        if (!input) return;
+        if (!addressSlotRef.current) return;
 
-        // The library loads async; if the user is already typing when it
-        // arrives, instantiating the widget on the focused input blurs it
-        // (closing the mobile keyboard mid-word). Capture focus + caret and
-        // restore them once the widget has attached.
-        const hadFocus = document.activeElement === input;
-        const caret = input.selectionStart ?? input.value.length;
+        el = new places.PlaceAutocompleteElement({
+          includedRegionCodes: ["us", "gb", "jp"],
+        });
+        el.placeholder = "ADDRESS";
+        el.className = "w-full";
+        addressSlotRef.current.replaceChildren(el);
+        setPlacesReady(true);
 
-        const ac = new places.Autocomplete(input, {
-          fields: ["address_components"],
-          types: ["address"],
-          componentRestrictions: { country: ["us", "gb", "jp"] },
+        // Mirror the element's text into form state as the user types so the
+        // manual-entry path, validation, and shipping-rate lookups keep working
+        // even when no suggestion is picked.
+        el.addEventListener("input", () => {
+          const value = el?.value ?? "";
+          setForm((prev) => ({ ...prev, address: value }));
         });
 
-        if (hadFocus) {
-          // Re-focus on the next frame so it sticks even if the widget blurs
-          // the field asynchronously during attach.
-          requestAnimationFrame(() => {
-            input.focus();
-            try {
-              input.setSelectionRange(caret, caret);
-            } catch {
-              // Some input types disallow setSelectionRange — focus is enough.
-            }
-          });
-        }
-        ac.addListener("place_changed", () => {
-          const comps = ac.getPlace().address_components;
-          if (!comps) return;
+        // Surface request failures (most commonly: Places API (New) disabled).
+        el.addEventListener("gmp-error", () => {
+          console.error(
+            "Google Places request failed — confirm 'Places API (New)' is enabled on the project."
+          );
+        });
+
+        el.addEventListener("gmp-select", async ({ placePrediction }) => {
+          const place = placePrediction.toPlace();
+          await place.fetchFields({ fields: ["addressComponents"] });
+          const comps = place.addressComponents ?? [];
           const get = (type: string, short = false) => {
             const c = comps.find((x) => x.types.includes(type));
-            return c ? (short ? c.short_name : c.long_name) : "";
+            if (!c) return "";
+            return (short ? c.shortText : c.longText) ?? "";
           };
           const line1 = `${get("street_number")} ${get("route")}`.trim();
           const iso = get("country", true);
@@ -166,13 +175,19 @@ export default function CheckoutForm() {
             postal: get("postal_code") || prev.postal,
             country: ISO_TO_LABEL[iso] ?? prev.country,
           }));
+          // Collapse the box back to just the street line to match form state.
+          if (el) el.value = line1 || el.value;
         });
       })
       .catch((err) => {
-        // Autocomplete is a progressive enhancement — manual entry still works —
-        // but log so a broken key/library load isn't invisible.
+        // Autocomplete is a progressive enhancement — the manual fallback input
+        // still works — but log so a broken key/library load isn't invisible.
         console.error("Google Places library failed to load", err);
       });
+
+    return () => {
+      el?.remove();
+    };
   }, []);
 
   // ---- Fetch shipping rates when the address is complete ------------------
@@ -439,16 +454,24 @@ export default function CheckoutForm() {
                     className={inputClass}
                   />
                   <div className="md:col-span-2">
+                    {/* Manual fallback — used until/unless the Places element
+                        mounts (e.g. library fails to load). Stays React-owned;
+                        the element is mounted into the sibling slot below so the
+                        two never fight over the same DOM node. */}
                     <input
-                      ref={addressInputRef}
                       name="address"
                       type="text"
-                      required
+                      required={!placesReady}
                       autoComplete="off"
                       placeholder="ADDRESS"
                       value={form.address}
                       onChange={handleChange}
-                      className={inputClass}
+                      className={`${inputClass} ${placesReady ? "hidden" : ""}`}
+                    />
+                    {/* Google PlaceAutocompleteElement mounts here */}
+                    <div
+                      ref={addressSlotRef}
+                      className={placesReady ? "" : "hidden"}
                     />
                   </div>
                   <div className="md:col-span-2">
