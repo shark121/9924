@@ -102,15 +102,49 @@ export default function CheckoutForm() {
     if (!key || placesStarted.current || !addressInputRef.current) return;
     placesStarted.current = true;
 
+    // Google reports key/referrer auth failures (e.g. RefererNotAllowedMapError)
+    // asynchronously via this global — importLibrary() resolves regardless — so
+    // without this hook the failure is completely silent in prod.
+    (window as unknown as { gm_authFailure?: () => void }).gm_authFailure =
+      () => {
+        console.error(
+          `Google Maps auth failed for ${window.location.origin}. Add this exact ` +
+            `host to the API key's HTTP referrer restrictions (e.g. ` +
+            `https://www.9924.store/*).`
+        );
+      };
+
     setOptions({ key, v: "weekly" });
     importLibrary("places")
       .then((places) => {
-        if (!addressInputRef.current) return;
-        const ac = new places.Autocomplete(addressInputRef.current, {
+        const input = addressInputRef.current;
+        if (!input) return;
+
+        // The library loads async; if the user is already typing when it
+        // arrives, instantiating the widget on the focused input blurs it
+        // (closing the mobile keyboard mid-word). Capture focus + caret and
+        // restore them once the widget has attached.
+        const hadFocus = document.activeElement === input;
+        const caret = input.selectionStart ?? input.value.length;
+
+        const ac = new places.Autocomplete(input, {
           fields: ["address_components"],
           types: ["address"],
           componentRestrictions: { country: ["us", "gb", "jp"] },
         });
+
+        if (hadFocus) {
+          // Re-focus on the next frame so it sticks even if the widget blurs
+          // the field asynchronously during attach.
+          requestAnimationFrame(() => {
+            input.focus();
+            try {
+              input.setSelectionRange(caret, caret);
+            } catch {
+              // Some input types disallow setSelectionRange — focus is enough.
+            }
+          });
+        }
         ac.addListener("place_changed", () => {
           const comps = ac.getPlace().address_components;
           if (!comps) return;
@@ -134,8 +168,10 @@ export default function CheckoutForm() {
           }));
         });
       })
-      .catch(() => {
-        // Autocomplete is a progressive enhancement — manual entry still works.
+      .catch((err) => {
+        // Autocomplete is a progressive enhancement — manual entry still works —
+        // but log so a broken key/library load isn't invisible.
+        console.error("Google Places library failed to load", err);
       });
   }, []);
 
