@@ -37,6 +37,22 @@ export type NormalizedRate = {
   estimatedDays: number | null;
 };
 
+// Flat-rate fallback used when the carrier API returns no quotes for an
+// address. Better to offer a fixed price and complete the sale than to dead-end
+// the customer with "no options found". Stable token so the payment-intent
+// re-price (getRateByToken) resolves to the same rate. Tune via env.
+const FLAT_FALLBACK_CENTS = Math.round(
+  Number(process.env.SHIP_FLAT_FALLBACK_USD ?? "15") * 100
+);
+const FLAT_FALLBACK_RATE: NormalizedRate = {
+  token: "flat_standard",
+  name: "Standard Shipping",
+  provider: "Standard",
+  amountCents: FLAT_FALLBACK_CENTS,
+  currency: "USD",
+  estimatedDays: null,
+};
+
 // Jerseys are light and similar; a flat per-item estimate inside one poly mailer
 // is plenty for a rate quote. Tune via env without touching code.
 const PER_ITEM_WEIGHT_KG = Number(process.env.SHIP_ITEM_WEIGHT_KG ?? "0.4");
@@ -124,7 +140,7 @@ export async function getRates(
     }>;
   };
 
-  return (data.rates ?? [])
+  const normalized = (data.rates ?? [])
     .filter((r) => r.servicelevel?.token)
     .map<NormalizedRate>((r) => ({
       token: r.servicelevel!.token!,
@@ -135,6 +151,10 @@ export async function getRates(
       estimatedDays: r.estimated_days ?? null,
     }))
     .sort((a, b) => a.amountCents - b.amountCents);
+
+  // No carrier quotes for this destination — fall back to the flat rate so the
+  // customer can still check out.
+  return normalized.length ? normalized : [FLAT_FALLBACK_RATE];
 }
 
 // Re-price a previously selected service server-side (authoritative).
