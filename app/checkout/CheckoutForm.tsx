@@ -70,9 +70,23 @@ export default function CheckoutForm() {
   const [ratesLoading, setRatesLoading] = useState(false);
   const [ratesError, setRatesError] = useState<string | null>(null);
 
-  const addressSlotRef = useRef<HTMLDivElement>(null);
+  // Google Places autocomplete — we drive it ourselves (data API) and render
+  // our own dropdown so it matches the site and behaves on mobile.
   const placesStarted = useRef(false);
-  const [placesReady, setPlacesReady] = useState(false);
+  const placesRef = useRef<typeof google.maps.places | null>(null);
+  const sessionTokenRef =
+    useRef<google.maps.places.AutocompleteSessionToken | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const addressBoxRef = useRef<HTMLDivElement>(null);
+  type Suggestion = {
+    id: string;
+    main: string;
+    secondary: string;
+    prediction: google.maps.places.PlacePrediction;
+  };
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [activeIdx, setActiveIdx] = useState(-1);
 
   const subtotal = displayItems.reduce(
     (t, it) => t + it.product.price * it.quantity,
@@ -109,20 +123,19 @@ export default function CheckoutForm() {
   });
 
   // ---- Google Places autocomplete on the address line --------------------
-  // Uses the modern PlaceAutocompleteElement web component. The legacy
-  // `Autocomplete` widget (deprecated March 2025) attached to our controlled
-  // <input> and blurred it on attach — closing the mobile keyboard mid-word.
-  // This element owns its own input inside a shadow root, so there's no focus
-  // fight. Requires "Places API (New)" enabled on the GCP project.
+  // We use the Places *data* API (fetchAutocompleteSuggestions) and render our
+  // own dropdown, rather than the PlaceAutocompleteElement web component. The
+  // element drops a shadow-DOM input + dropdown we can't style to match the
+  // site and that looks broken on mobile; owning the markup fixes both, and
+  // keeping our plain controlled <input> means no focus/keyboard fight.
+  // Requires "Places API (New)" enabled on the GCP project.
   useEffect(() => {
     const key = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-    const slot = addressSlotRef.current;
-    if (!key || placesStarted.current || !slot) return;
+    if (!key || placesStarted.current) return;
     placesStarted.current = true;
 
     // Google reports key/referrer auth failures (e.g. RefererNotAllowedMapError)
-    // asynchronously via this global — importLibrary() resolves regardless — so
-    // without this hook the failure is completely silent in prod.
+    // asynchronously via this global, so without this hook it's silent in prod.
     (window as unknown as { gm_authFailure?: () => void }).gm_authFailure =
       () => {
         console.error(
@@ -133,73 +146,124 @@ export default function CheckoutForm() {
       };
 
     setOptions({ key, v: "weekly" });
-
-    let el: google.maps.places.PlaceAutocompleteElement | null = null;
-
     importLibrary("places")
       .then((places) => {
-        if (!addressSlotRef.current) return;
-
-        el = new places.PlaceAutocompleteElement({
-          includedRegionCodes: ["us", "gb", "jp"],
-        });
-        el.placeholder = "ADDRESS";
-        el.className = "w-full";
-        addressSlotRef.current.replaceChildren(el);
-        setPlacesReady(true);
-
-        // Mirror the element's text into form state as the user types so the
-        // manual-entry path, validation, and shipping-rate lookups keep working
-        // even when no suggestion is picked.
-        el.addEventListener("input", () => {
-          const value = el?.value ?? "";
-          setForm((prev) => ({ ...prev, address: value }));
-        });
-
-        // Surface request failures (most commonly: Places API (New) disabled).
-        el.addEventListener("gmp-error", () => {
-          console.error(
-            "Google Places request failed — confirm 'Places API (New)' is enabled on the project."
-          );
-        });
-
-        el.addEventListener("gmp-select", async ({ placePrediction }) => {
-          const place = placePrediction.toPlace();
-          await place.fetchFields({ fields: ["addressComponents"] });
-          const comps = place.addressComponents ?? [];
-          const get = (type: string, short = false) => {
-            const c = comps.find((x) => x.types.includes(type));
-            if (!c) return "";
-            return (short ? c.shortText : c.longText) ?? "";
-          };
-          const line1 = `${get("street_number")} ${get("route")}`.trim();
-          const iso = get("country", true);
-          setForm((prev) => ({
-            ...prev,
-            address: line1 || prev.address,
-            city:
-              get("locality") ||
-              get("postal_town") ||
-              get("sublocality_level_1") ||
-              prev.city,
-            state: get("administrative_area_level_1", true) || prev.state,
-            postal: get("postal_code") || prev.postal,
-            country: ISO_TO_LABEL[iso] ?? prev.country,
-          }));
-          // Collapse the box back to just the street line to match form state.
-          if (el) el.value = line1 || el.value;
-        });
+        placesRef.current = places;
       })
       .catch((err) => {
-        // Autocomplete is a progressive enhancement — the manual fallback input
-        // still works — but log so a broken key/library load isn't invisible.
+        // Autocomplete is a progressive enhancement — the address field still
+        // works by hand — but log so a broken key/library load isn't invisible.
         console.error("Google Places library failed to load", err);
       });
-
-    return () => {
-      el?.remove();
-    };
   }, []);
+
+  // Close the dropdown on any outside tap/click (handles desktop + mobile).
+  useEffect(() => {
+    if (!showSuggestions) return;
+    const onDown = (e: PointerEvent) => {
+      if (!addressBoxRef.current?.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener("pointerdown", onDown);
+    return () => document.removeEventListener("pointerdown", onDown);
+  }, [showSuggestions]);
+
+  const fetchSuggestions = (input: string) => {
+    const places = placesRef.current;
+    if (!places) return;
+    if (!sessionTokenRef.current) {
+      sessionTokenRef.current = new places.AutocompleteSessionToken();
+    }
+    places.AutocompleteSuggestion.fetchAutocompleteSuggestions({
+      input,
+      includedRegionCodes: ["us", "gb", "jp"],
+      sessionToken: sessionTokenRef.current,
+    })
+      .then(({ suggestions: results }) => {
+        const mapped = results
+          .map((s) => s.placePrediction)
+          .filter((p): p is google.maps.places.PlacePrediction => !!p)
+          .map<Suggestion>((p) => ({
+            id: p.placeId,
+            main: p.mainText?.text ?? p.text.text,
+            secondary: p.secondaryText?.text ?? "",
+            prediction: p,
+          }));
+        setSuggestions(mapped);
+        setShowSuggestions(mapped.length > 0);
+        setActiveIdx(-1);
+      })
+      .catch((err) => {
+        console.error("Places autocomplete request failed", err);
+        setSuggestions([]);
+        setShowSuggestions(false);
+      });
+  };
+
+  // The address input keeps the shared controlled-state behavior, plus a
+  // debounced suggestion fetch. Fetching lives here (not in an effect on
+  // form.address) so picking a place doesn't immediately re-open the dropdown.
+  const handleAddressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    handleChange(e);
+    const input = e.target.value;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (!placesRef.current || input.trim().length < 3) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+    debounceRef.current = setTimeout(() => fetchSuggestions(input), 250);
+  };
+
+  const selectSuggestion = async (item: Suggestion) => {
+    setShowSuggestions(false);
+    setSuggestions([]);
+    try {
+      const place = item.prediction.toPlace();
+      await place.fetchFields({ fields: ["addressComponents"] });
+      // fetchFields concludes the billing session — start a fresh token next time.
+      sessionTokenRef.current = null;
+      const comps = place.addressComponents ?? [];
+      const get = (type: string, short = false) => {
+        const c = comps.find((x) => x.types.includes(type));
+        if (!c) return "";
+        return (short ? c.shortText : c.longText) ?? "";
+      };
+      const line1 = `${get("street_number")} ${get("route")}`.trim();
+      const iso = get("country", true);
+      setForm((prev) => ({
+        ...prev,
+        address: line1 || item.main || prev.address,
+        city:
+          get("locality") ||
+          get("postal_town") ||
+          get("sublocality_level_1") ||
+          prev.city,
+        state: get("administrative_area_level_1", true) || prev.state,
+        postal: get("postal_code") || prev.postal,
+        country: ISO_TO_LABEL[iso] ?? prev.country,
+      }));
+    } catch (err) {
+      console.error("Failed to load place details", err);
+    }
+  };
+
+  const handleAddressKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showSuggestions || suggestions.length === 0) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setActiveIdx((i) => (i + 1) % suggestions.length);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActiveIdx((i) => (i - 1 + suggestions.length) % suggestions.length);
+    } else if (e.key === "Enter" && activeIdx >= 0) {
+      e.preventDefault();
+      selectSuggestion(suggestions[activeIdx]);
+    } else if (e.key === "Escape") {
+      setShowSuggestions(false);
+    }
+  };
 
   // ---- Fetch shipping rates when the address is complete ------------------
   useEffect(() => {
@@ -561,26 +625,61 @@ export default function CheckoutForm() {
                   onChange={handleChange}
                   className={inputClass}
                 />
-                <div className="md:col-span-2">
-                  {/* Manual fallback — used until/unless the Places element
-                      mounts (e.g. library fails to load). Stays React-owned;
-                      the element is mounted into the sibling slot below so the
-                      two never fight over the same DOM node. */}
+                <div className="md:col-span-2 relative" ref={addressBoxRef}>
                   <input
                     name="address"
                     type="text"
-                    required={!placesReady}
+                    required
                     autoComplete="off"
                     placeholder="ADDRESS"
                     value={form.address}
-                    onChange={handleChange}
-                    className={`${inputClass} ${placesReady ? "hidden" : ""}`}
+                    onChange={handleAddressChange}
+                    onKeyDown={handleAddressKeyDown}
+                    onFocus={() => {
+                      if (suggestions.length > 0) setShowSuggestions(true);
+                    }}
+                    role="combobox"
+                    aria-expanded={showSuggestions}
+                    aria-autocomplete="list"
+                    aria-controls="address-suggestions"
+                    className={inputClass}
                   />
-                  {/* Google PlaceAutocompleteElement mounts here */}
-                  <div
-                    ref={addressSlotRef}
-                    className={placesReady ? "" : "hidden"}
-                  />
+                  {showSuggestions && suggestions.length > 0 && (
+                    <ul
+                      id="address-suggestions"
+                      role="listbox"
+                      className="absolute left-0 right-0 top-full z-20 mt-1 max-h-72 overflow-auto border border-outline-variant/30 bg-surface-container-lowest shadow-lg"
+                    >
+                      {suggestions.map((s, i) => (
+                        <li key={s.id} role="option" aria-selected={i === activeIdx}>
+                          <button
+                            type="button"
+                            // onMouseDown (before blur) so the tap registers
+                            // even as focus leaves the input.
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              selectSuggestion(s);
+                            }}
+                            onMouseEnter={() => setActiveIdx(i)}
+                            className={`block w-full px-4 py-3 text-left border-b border-outline-variant/10 last:border-0 transition-colors ${
+                              i === activeIdx
+                                ? "bg-surface-container-high"
+                                : "hover:bg-surface-container"
+                            }`}
+                          >
+                            <span className="block truncate text-xs font-bold uppercase tracking-wider font-headline">
+                              {s.main}
+                            </span>
+                            {s.secondary && (
+                              <span className="mt-0.5 block truncate text-[10px] tracking-widest uppercase text-outline font-label">
+                                {s.secondary}
+                              </span>
+                            )}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
                 <div className="md:col-span-2">
                   <input
