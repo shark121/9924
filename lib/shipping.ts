@@ -109,26 +109,43 @@ export async function getRates(
   to: ShippingAddressInput,
   items: IncomingItem[]
 ): Promise<NormalizedRate[]> {
-  if (!SHIPPO_TOKEN) throw "SHIPPO_API_TOKEN is not set";
+  // No token configured — don't dead-end checkout; use the flat fallback.
+  if (!SHIPPO_TOKEN) {
+    console.warn("[shipping] SHIPPO_API_TOKEN not set — using flat fallback rate");
+    return [FLAT_FALLBACK_RATE];
+  }
 
   const qty = Math.max(1, totalQuantity(items));
   const parcel = { ...PARCEL, weight: (qty * PER_ITEM_WEIGHT_KG).toFixed(2) };
 
-  const res = await fetch(`${SHIPPO_BASE}/shipments`, {
-    method: "POST",
-    headers: {
-      Authorization: `ShippoToken ${SHIPPO_TOKEN}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      address_from: originAddress(),
-      address_to: toAddressTo(to),
-      parcels: [parcel],
-      async: false,
-    }),
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${SHIPPO_BASE}/shipments`, {
+      method: "POST",
+      headers: {
+        Authorization: `ShippoToken ${SHIPPO_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        address_from: originAddress(),
+        address_to: toAddressTo(to),
+        parcels: [parcel],
+        async: false,
+      }),
+    });
+  } catch (e) {
+    // Network/DNS error reaching Shippo — fall back rather than fail the sale.
+    console.error("[shipping] could not reach Shippo:", e);
+    return [FLAT_FALLBACK_RATE];
+  }
 
-  if (!res.ok) throw `Shipping provider error (${res.status})`;
+  if (!res.ok) {
+    // 401 (bad token), 4xx (rejected address), 5xx — log the real reason but
+    // still let the customer check out at the flat rate.
+    const detail = await res.text().catch(() => "");
+    console.error(`[shipping] Shippo ${res.status}: ${detail.slice(0, 300)}`);
+    return [FLAT_FALLBACK_RATE];
+  }
 
   const data = (await res.json()) as {
     rates?: Array<{
