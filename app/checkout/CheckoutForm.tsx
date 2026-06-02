@@ -23,6 +23,38 @@ type Rate = {
   estimatedDays: number | null;
 };
 
+// Mirrors lib/shipping.ts ShippoDebug — the Shippo outcome the API echoes back
+// so we can surface it in the browser console (no server access needed).
+type ShippoDebug = {
+  tokenPresent: boolean;
+  destination: Record<string, string>;
+  httpStatus: number | null;
+  rateCount: number;
+  usedFallback: boolean;
+  messages: string[];
+  error?: string;
+};
+
+// Print the server's Shippo diagnostics to the browser console. When the flat
+// $15 fallback was used, it's shown in red with the exact reason(s) Shippo gave.
+function logShippoDebug(debug?: ShippoDebug) {
+  if (!debug) return;
+  const headline = debug.usedFallback
+    ? "[shippo] ⚠ FLAT $15 FALLBACK used"
+    : `[shippo] ✓ ${debug.rateCount} live rate(s)`;
+  console.groupCollapsed(
+    `%c${headline}`,
+    `color:${debug.usedFallback ? "#c0392b" : "#27ae60"};font-weight:bold`
+  );
+  console.log("tokenPresent:", debug.tokenPresent);
+  console.log("httpStatus:", debug.httpStatus);
+  console.log("rateCount:", debug.rateCount);
+  console.log("destination:", debug.destination);
+  if (debug.error) console.error("error:", debug.error);
+  if (debug.messages.length) console.warn("messages:", debug.messages);
+  console.groupEnd();
+}
+
 // Places country code -> our select label
 const ISO_TO_LABEL: Record<string, string> = {
   US: "UNITED STATES",
@@ -301,6 +333,7 @@ export default function CheckoutForm() {
           }),
         });
         const data = await res.json();
+        logShippoDebug(data.debug);
         if (!res.ok) {
           setRates([]);
           setSelectedToken(null);

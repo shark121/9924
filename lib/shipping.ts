@@ -125,31 +125,68 @@ function toAddressTo(s: ShippingAddressInput) {
   };
 }
 
-// Fetch live rate quotes for a destination + cart. Returns cheapest-first.
-export async function getRates(
+// Diagnostics about a rate lookup, surfaced to the client so the Shippo
+// outcome is visible in the browser console — not just the server logs. Never
+// contains the API token or any secret.
+export type ShippoDebug = {
+  tokenPresent: boolean;
+  destination: {
+    street1: string;
+    city: string;
+    state: string;
+    zip: string;
+    country: string;
+  };
+  httpStatus: number | null; // Shippo HTTP status, null if the call never ran
+  rateCount: number; // usable rates after normalization
+  usedFallback: boolean; // true => the $15 flat rate was substituted
+  messages: string[]; // Shippo `messages` + any local reason for fallback
+  error?: string; // network/HTTP error reaching Shippo
+};
+
+// Fetch live rate quotes for a destination + cart, plus diagnostics. Rates are
+// cheapest-first. `getRates` below is the thin back-compat wrapper.
+export async function getRatesWithDebug(
   to: ShippingAddressInput,
   items: IncomingItem[]
-): Promise<NormalizedRate[]> {
+): Promise<{ rates: NormalizedRate[]; debug: ShippoDebug }> {
+  const addressTo = toAddressTo(to);
+  const debug: ShippoDebug = {
+    tokenPresent: !!SHIPPO_TOKEN,
+    destination: {
+      street1: addressTo.street1,
+      city: addressTo.city,
+      state: addressTo.state,
+      zip: addressTo.zip,
+      country: addressTo.country,
+    },
+    httpStatus: null,
+    rateCount: 0,
+    usedFallback: false,
+    messages: [],
+  };
+
   // No token configured — don't dead-end checkout; use the flat fallback.
   if (!SHIPPO_TOKEN) {
-    console.warn("[shipping] SHIPPO_API_TOKEN not set — using flat fallback rate");
-    return [FLAT_FALLBACK_RATE];
+    const msg = "SHIPPO_API_TOKEN not set on the server — using flat fallback.";
+    console.warn(`[shipping] ${msg}`);
+    debug.usedFallback = true;
+    debug.messages.push(msg);
+    return { rates: [FLAT_FALLBACK_RATE], debug };
   }
 
   const qty = Math.max(1, totalQuantity(items));
   const parcel = { ...PARCEL, weight: (qty * PER_ITEM_WEIGHT_KG).toFixed(2) };
 
-  const addressTo = toAddressTo(to);
   console.log(
     `[shipping] rate request -> ${addressTo.street1 || "(no street)"}, ` +
       `${addressTo.city || "(no city)"} ${addressTo.state || "-"} ` +
       `${addressTo.zip || "(no zip)"} ${addressTo.country || "(no country)"}`
   );
   if (!addressTo.country) {
-    console.warn(
-      `[shipping] country "${String(to.country)}" did not map to a supported ` +
-        `ISO code — Shippo will reject this as an invalid destination.`
-    );
+    const msg = `country "${String(to.country)}" did not map to a supported ISO code — Shippo will reject this as an invalid destination.`;
+    console.warn(`[shipping] ${msg}`);
+    debug.messages.push(msg);
   }
 
   let res: Response;
@@ -170,15 +207,25 @@ export async function getRates(
   } catch (e) {
     // Network/DNS error reaching Shippo — fall back rather than fail the sale.
     console.error("[shipping] could not reach Shippo:", e);
-    return [FLAT_FALLBACK_RATE];
+    debug.usedFallback = true;
+    debug.error = `Could not reach Shippo: ${
+      e instanceof Error ? e.message : String(e)
+    }`;
+    debug.messages.push(debug.error);
+    return { rates: [FLAT_FALLBACK_RATE], debug };
   }
 
+  debug.httpStatus = res.status;
+
   if (!res.ok) {
-    // 401 (bad token), 4xx (rejected address), 5xx — log the real reason but
-    // still let the customer check out at the flat rate.
+    // 401 (bad token), 4xx (rejected address), 5xx — surface the real reason
+    // but still let the customer check out at the flat rate.
     const detail = await res.text().catch(() => "");
     console.error(`[shipping] Shippo ${res.status}: ${detail.slice(0, 300)}`);
-    return [FLAT_FALLBACK_RATE];
+    debug.usedFallback = true;
+    debug.error = `Shippo HTTP ${res.status}: ${detail.slice(0, 300)}`;
+    debug.messages.push(debug.error);
+    return { rates: [FLAT_FALLBACK_RATE], debug };
   }
 
   const data = (await res.json()) as {
@@ -195,6 +242,14 @@ export async function getRates(
     messages?: Array<{ source?: string; code?: string; text?: string }>;
   };
 
+  // Capture Shippo's own messages even on success — they explain partial
+  // carrier failures too.
+  debug.messages.push(
+    ...(data.messages ?? [])
+      .map((m) => `${m.source ?? "Shippo"}: ${m.text ?? ""}`.trim())
+      .filter(Boolean)
+  );
+
   const normalized = (data.rates ?? [])
     .filter((r) => r.servicelevel?.token)
     .map<NormalizedRate>((r) => ({
@@ -206,6 +261,7 @@ export async function getRates(
       estimatedDays: r.estimated_days ?? null,
     }))
     .sort((a, b) => a.amountCents - b.amountCents);
+  debug.rateCount = normalized.length;
 
   if (normalized.length) {
     console.log(
@@ -213,26 +269,26 @@ export async function getRates(
         `${normalized[0].provider} ${normalized[0].name} ` +
         `$${(normalized[0].amountCents / 100).toFixed(2)}`
     );
-    return normalized;
+    return { rates: normalized, debug };
   }
 
   // No carrier quotes for this destination — fall back to the flat rate so the
-  // customer can still check out, but log why so this isn't a black box.
-  const reasons = (data.messages ?? [])
-    .map((m) => `${m.source ?? "Shippo"}: ${m.text ?? ""}`.trim())
-    .filter(Boolean);
+  // customer can still check out, but record why so this isn't a black box.
+  debug.usedFallback = true;
   console.warn(
     "[shipping] Shippo returned 0 usable rates — using flat fallback. " +
-      `Destination: ${JSON.stringify({
-        street1: addressTo.street1,
-        city: addressTo.city,
-        state: addressTo.state,
-        zip: addressTo.zip,
-        country: addressTo.country,
-      })}.` +
-      (reasons.length ? ` Messages: ${reasons.join(" | ")}` : "")
+      `Destination: ${JSON.stringify(debug.destination)}.` +
+      (debug.messages.length ? ` Messages: ${debug.messages.join(" | ")}` : "")
   );
-  return [FLAT_FALLBACK_RATE];
+  return { rates: [FLAT_FALLBACK_RATE], debug };
+}
+
+// Fetch live rate quotes for a destination + cart. Returns cheapest-first.
+export async function getRates(
+  to: ShippingAddressInput,
+  items: IncomingItem[]
+): Promise<NormalizedRate[]> {
+  return (await getRatesWithDebug(to, items)).rates;
 }
 
 // Re-price a previously selected service server-side (authoritative).

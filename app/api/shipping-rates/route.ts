@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import {
   assertValidItems,
-  getRates,
+  getRatesWithDebug,
   type IncomingItem,
   type ShippingAddressInput,
 } from "@/lib/shipping";
@@ -26,14 +26,16 @@ export async function POST(request: NextRequest) {
 
   try {
     assertValidItems(body.items);
-    const rates = await getRates(a, body.items);
+    const { rates, debug } = await getRatesWithDebug(a, body.items);
     if (!rates.length) {
       return Response.json(
-        { error: "No shipping options for this address." },
+        { error: "No shipping options for this address.", debug },
         { status: 422 }
       );
     }
-    return Response.json({ rates });
+    // `debug` lets the client mirror the Shippo outcome (status, messages,
+    // whether the flat fallback was used) into the browser console.
+    return Response.json({ rates, debug });
   } catch (e) {
     const msg = typeof e === "string" ? e : "Could not fetch shipping rates.";
     return Response.json({ error: msg }, { status: 400 });
