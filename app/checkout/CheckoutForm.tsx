@@ -232,16 +232,22 @@ export default function CheckoutForm() {
       };
       const line1 = `${get("street_number")} ${get("route")}`.trim();
       const iso = get("country", true);
+      // Replace the whole address from the newly selected place — never fall
+      // back to the previous values per-field. Mixing a new street with a stale
+      // city/ZIP/state from an earlier pick yields a real-looking but
+      // undeliverable address that Shippo rejects ("Invalid Destination"),
+      // silently dropping checkout to the flat fallback rate.
       setForm((prev) => ({
         ...prev,
-        address: line1 || item.main || prev.address,
+        address: line1 || item.main,
         city:
           get("locality") ||
           get("postal_town") ||
-          get("sublocality_level_1") ||
-          prev.city,
-        state: get("administrative_area_level_1", true) || prev.state,
-        postal: get("postal_code") || prev.postal,
+          get("sublocality_level_1"),
+        state: get("administrative_area_level_1", true),
+        postal: get("postal_code"),
+        // Country must always be a valid <select> option; keep the prior choice
+        // only if Google didn't return one (it effectively always does here).
         country: ISO_TO_LABEL[iso] ?? prev.country,
       }));
     } catch (err) {

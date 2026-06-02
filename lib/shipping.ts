@@ -90,17 +90,38 @@ export function assertValidItems(items: IncomingItem[]): void {
   }
 }
 
+// Coerce any input-field value to a clean, trimmed string. The form fields are
+// controlled <input>s (always strings), but a programmatic caller, a number, or
+// null/undefined shouldn't leak a non-string into the Shippo body.
+function str(v: unknown): string {
+  return v == null ? "" : String(v).trim();
+}
+
+// Map a free-form country value to the ISO 3166-1 alpha-2 code Shippo expects.
+// Tolerant of case/whitespace and already-ISO input, so "united states",
+// " UNITED STATES", and "US" all resolve. Returns "" (not a silent "US"
+// default) when unknown so callers can see a real geocoding failure instead of
+// shipping a foreign address to the US.
+const COUNTRY_BY_ISO = new Set(Object.values(COUNTRY_CODE));
+function toCountryCode(raw: unknown): string {
+  const v = str(raw).toUpperCase();
+  if (!v) return "";
+  if (COUNTRY_CODE[v]) return COUNTRY_CODE[v]; // label -> ISO
+  if (COUNTRY_BY_ISO.has(v)) return v; // already an ISO code we support
+  return "";
+}
+
 function toAddressTo(s: ShippingAddressInput) {
   return {
-    name: `${s.firstName ?? ""} ${s.lastName ?? ""}`.trim() || "Customer",
-    street1: s.address ?? "",
-    street2: s.apartment || undefined,
-    city: s.city ?? "",
-    state: s.state ?? "",
-    zip: s.postal ?? "",
-    country: COUNTRY_CODE[s.country ?? ""] ?? "US",
-    phone: s.phone || undefined,
-    email: s.email || undefined,
+    name: `${str(s.firstName)} ${str(s.lastName)}`.trim() || "Customer",
+    street1: str(s.address),
+    street2: str(s.apartment) || undefined,
+    city: str(s.city),
+    state: str(s.state),
+    zip: str(s.postal),
+    country: toCountryCode(s.country),
+    phone: str(s.phone) || undefined,
+    email: str(s.email) || undefined,
   };
 }
 
@@ -118,6 +139,19 @@ export async function getRates(
   const qty = Math.max(1, totalQuantity(items));
   const parcel = { ...PARCEL, weight: (qty * PER_ITEM_WEIGHT_KG).toFixed(2) };
 
+  const addressTo = toAddressTo(to);
+  console.log(
+    `[shipping] rate request -> ${addressTo.street1 || "(no street)"}, ` +
+      `${addressTo.city || "(no city)"} ${addressTo.state || "-"} ` +
+      `${addressTo.zip || "(no zip)"} ${addressTo.country || "(no country)"}`
+  );
+  if (!addressTo.country) {
+    console.warn(
+      `[shipping] country "${String(to.country)}" did not map to a supported ` +
+        `ISO code — Shippo will reject this as an invalid destination.`
+    );
+  }
+
   let res: Response;
   try {
     res = await fetch(`${SHIPPO_BASE}/shipments`, {
@@ -128,7 +162,7 @@ export async function getRates(
       },
       body: JSON.stringify({
         address_from: originAddress(),
-        address_to: toAddressTo(to),
+        address_to: addressTo,
         parcels: [parcel],
         async: false,
       }),
@@ -155,6 +189,10 @@ export async function getRates(
       estimated_days: number | null;
       servicelevel?: { name?: string; token?: string };
     }>;
+    // Shippo returns 200 even when a carrier can't quote, explaining why in
+    // `messages` (e.g. "out of service area", "carrier account doesn't support
+    // …"). Surface these — without them an empty rate set is a silent mystery.
+    messages?: Array<{ source?: string; code?: string; text?: string }>;
   };
 
   const normalized = (data.rates ?? [])
@@ -169,9 +207,32 @@ export async function getRates(
     }))
     .sort((a, b) => a.amountCents - b.amountCents);
 
+  if (normalized.length) {
+    console.log(
+      `[shipping] Shippo returned ${normalized.length} rate(s); cheapest ` +
+        `${normalized[0].provider} ${normalized[0].name} ` +
+        `$${(normalized[0].amountCents / 100).toFixed(2)}`
+    );
+    return normalized;
+  }
+
   // No carrier quotes for this destination — fall back to the flat rate so the
-  // customer can still check out.
-  return normalized.length ? normalized : [FLAT_FALLBACK_RATE];
+  // customer can still check out, but log why so this isn't a black box.
+  const reasons = (data.messages ?? [])
+    .map((m) => `${m.source ?? "Shippo"}: ${m.text ?? ""}`.trim())
+    .filter(Boolean);
+  console.warn(
+    "[shipping] Shippo returned 0 usable rates — using flat fallback. " +
+      `Destination: ${JSON.stringify({
+        street1: addressTo.street1,
+        city: addressTo.city,
+        state: addressTo.state,
+        zip: addressTo.zip,
+        country: addressTo.country,
+      })}.` +
+      (reasons.length ? ` Messages: ${reasons.join(" | ")}` : "")
+  );
+  return [FLAT_FALLBACK_RATE];
 }
 
 // Re-price a previously selected service server-side (authoritative).
