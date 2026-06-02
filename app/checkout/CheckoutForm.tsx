@@ -33,7 +33,15 @@ const ISO_TO_LABEL: Record<string, string> = {
 export default function CheckoutForm() {
   const stripe = useStripe();
   const elements = useElements();
-  const { items, getCartTotal } = useCartStore();
+  const { items } = useCartStore();
+
+  // The cart is persisted to localStorage, so it's only known on the client.
+  // Render an empty cart until after mount so the server HTML and the first
+  // client paint agree (otherwise the totals hydrate-mismatch). Effects below
+  // run client-only and use the real `items` directly.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const displayItems = mounted ? items : [];
 
   // Mobile is a two-step flow (shipping → payment). On desktop both columns are
   // always visible, so `step` only gates mobile visibility.
@@ -66,7 +74,10 @@ export default function CheckoutForm() {
   const placesStarted = useRef(false);
   const [placesReady, setPlacesReady] = useState(false);
 
-  const subtotal = getCartTotal();
+  const subtotal = displayItems.reduce(
+    (t, it) => t + it.product.price * it.quantity,
+    0
+  );
   const taxRate = 0.08;
   const taxes = parseFloat((subtotal * taxRate).toFixed(2));
   const selectedRate = rates.find((r) => r.token === selectedToken) ?? null;
@@ -280,6 +291,23 @@ export default function CheckoutForm() {
 
   const goToPayment = () => {
     if (!validateShipping()) return;
+    // The whole point of the two-step flow: don't reach Stripe until we have a
+    // real, selected shipping rate so the amount we charge is accurate.
+    if (ratesLoading) {
+      setShippingError("Calculating shipping… one moment.");
+      return;
+    }
+    if (rates.length === 0) {
+      setShippingError(
+        ratesError ?? "Enter a valid address to see shipping options."
+      );
+      return;
+    }
+    if (!selectedToken) {
+      setShippingError("Please select a shipping option.");
+      return;
+    }
+    setShippingError(null);
     setStep("payment");
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -353,10 +381,89 @@ export default function CheckoutForm() {
     }
   };
 
-  const leftVisible = step === "shipping" ? "block" : "hidden";
-  const rightVisible = step === "payment" ? "block" : "hidden";
-
   const money = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+
+  // Shared order summary (items + running totals). Rendered on both steps so
+  // the customer always sees the price they're about to pay — including the
+  // live shipping estimate once a rate is chosen on step 1.
+  const renderSummary = () => (
+    <div className="bg-surface-container-low p-5 sm:p-8 space-y-6">
+      <h2 className="text-base md:text-lg font-bold uppercase tracking-tight font-headline">
+        Order Summary
+      </h2>
+
+      <div className="space-y-5">
+        {displayItems.length === 0 ? (
+          <p className="text-[10px] tracking-widest uppercase text-outline font-label">
+            YOUR BAG IS EMPTY
+          </p>
+        ) : (
+          displayItems.map((item) => {
+            const liveProduct =
+              allProducts.find((p) => p.id === item.product.id) ?? item.product;
+            return (
+              <div
+                key={`${item.product.id}-${item.size}`}
+                className="flex items-center gap-4 group"
+              >
+                <div className="relative w-16 h-16 bg-surface-container-highest flex-shrink-0 overflow-hidden">
+                  <Image
+                    src={liveProduct.images[0]}
+                    alt={liveProduct.name}
+                    fill
+                    className="object-contain grayscale p-2"
+                    sizes="64px"
+                  />
+                  <span className="absolute -top-2 -right-2 bg-primary text-on-primary text-[10px] w-5 h-5 flex items-center justify-center font-bold font-label z-10">
+                    {item.quantity}
+                  </span>
+                </div>
+                <div className="flex-grow min-w-0">
+                  <h3 className="text-sm font-bold uppercase tracking-tight font-headline">
+                    {item.product.name}
+                  </h3>
+                  <p className="text-[10px] text-outline tracking-widest mt-1 font-label uppercase">
+                    SIZE: {item.size}
+                  </p>
+                </div>
+                <span className="text-sm font-bold font-headline shrink-0">
+                  ${(item.product.price * item.quantity).toFixed(2)}
+                </span>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      <div className="space-y-4 pt-6 border-t border-outline-variant/20">
+        <div className="flex justify-between text-[10px] tracking-widest uppercase text-on-surface-variant font-label">
+          <span>Subtotal</span>
+          <span>${subtotal.toFixed(2)}</span>
+        </div>
+        <div className="flex justify-between text-[10px] tracking-widest uppercase text-on-surface-variant font-label">
+          <span>Estimated Taxes</span>
+          <span>${taxes.toFixed(2)}</span>
+        </div>
+        <div className="flex justify-between text-[10px] tracking-widest uppercase text-on-surface-variant font-label">
+          <span>Shipping</span>
+          <span>{selectedRate ? `$${shippingCost.toFixed(2)}` : "—"}</span>
+        </div>
+        <div className="flex justify-between items-baseline pt-4 border-t border-outline-variant/20">
+          <span className="text-base md:text-lg font-bold uppercase tracking-tight font-headline">
+            Total
+          </span>
+          <div className="text-right">
+            <span className="text-[10px] text-outline tracking-widest mr-2 font-label">
+              USD
+            </span>
+            <span className="text-lg md:text-xl font-bold font-headline">
+              ${total.toFixed(2)}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div className="bg-surface text-on-surface font-body selection:bg-primary selection:text-on-primary min-h-screen">
@@ -377,8 +484,8 @@ export default function CheckoutForm() {
         </Link>
       </header>
 
-      {/* Mobile step indicator */}
-      <div className="md:hidden px-4 sm:px-6 mb-2">
+      {/* Step indicator */}
+      <div className="max-w-2xl mx-auto px-4 sm:px-6 md:px-8 mb-6 md:mb-8">
         <div className="flex items-center gap-3 text-[10px] tracking-widest uppercase font-label">
           <span className={step === "shipping" ? "text-primary" : "text-outline"}>
             1 · Shipping
@@ -391,348 +498,276 @@ export default function CheckoutForm() {
       </div>
 
       <form onSubmit={handlePay}>
-        <main className="max-w-[1440px] mx-auto px-4 sm:px-6 md:px-12 pb-20 md:pb-32">
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-10 md:gap-16 items-start">
-            {/* LEFT — shipping (mobile step 1) */}
-            <div
-              className={`${leftVisible} md:block md:col-span-7 space-y-10 md:space-y-16`}
-            >
-              <section className="space-y-6 md:space-y-8">
-                <h2 className="text-lg md:text-xl font-bold uppercase tracking-tight font-headline">
-                  Contact Information
-                </h2>
-                <div className="space-y-4">
+        <main className="max-w-2xl mx-auto px-4 sm:px-6 md:px-8 pb-20 md:pb-32">
+          {/* STEP 1 — shipping details + live rate estimate */}
+          <div
+            className={
+              step === "shipping" ? "block space-y-10 md:space-y-12" : "hidden"
+            }
+          >
+            <section className="space-y-6 md:space-y-8">
+              <h2 className="text-lg md:text-xl font-bold uppercase tracking-tight font-headline">
+                Contact Information
+              </h2>
+              <div className="space-y-4">
+                <input
+                  name="email"
+                  type="email"
+                  required
+                  placeholder="EMAIL ADDRESS"
+                  value={form.email}
+                  onChange={handleChange}
+                  className={inputClass}
+                />
+                <div className="flex items-center gap-2">
                   <input
-                    name="email"
-                    type="email"
-                    required
-                    placeholder="EMAIL ADDRESS"
-                    value={form.email}
+                    id="news"
+                    name="newsletter"
+                    type="checkbox"
+                    checked={form.newsletter}
                     onChange={handleChange}
-                    className={inputClass}
+                    className="w-4 h-4 border-outline-variant/20 text-primary focus:ring-0 accent-black"
                   />
-                  <div className="flex items-center gap-2">
-                    <input
-                      id="news"
-                      name="newsletter"
-                      type="checkbox"
-                      checked={form.newsletter}
-                      onChange={handleChange}
-                      className="w-4 h-4 border-outline-variant/20 text-primary focus:ring-0 accent-black"
-                    />
-                    <label
-                      htmlFor="news"
-                      className="text-[10px] tracking-widest uppercase text-on-surface-variant font-label cursor-pointer"
-                    >
-                      Email me with news and offers
-                    </label>
-                  </div>
-                </div>
-              </section>
-
-              <section className="space-y-6 md:space-y-8">
-                <h2 className="text-lg md:text-xl font-bold uppercase tracking-tight font-headline">
-                  Shipping Address
-                </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
-                  <input
-                    name="firstName"
-                    type="text"
-                    required
-                    placeholder="FIRST NAME"
-                    value={form.firstName}
-                    onChange={handleChange}
-                    className={inputClass}
-                  />
-                  <input
-                    name="lastName"
-                    type="text"
-                    required
-                    placeholder="LAST NAME"
-                    value={form.lastName}
-                    onChange={handleChange}
-                    className={inputClass}
-                  />
-                  <div className="md:col-span-2">
-                    {/* Manual fallback — used until/unless the Places element
-                        mounts (e.g. library fails to load). Stays React-owned;
-                        the element is mounted into the sibling slot below so the
-                        two never fight over the same DOM node. */}
-                    <input
-                      name="address"
-                      type="text"
-                      required={!placesReady}
-                      autoComplete="off"
-                      placeholder="ADDRESS"
-                      value={form.address}
-                      onChange={handleChange}
-                      className={`${inputClass} ${placesReady ? "hidden" : ""}`}
-                    />
-                    {/* Google PlaceAutocompleteElement mounts here */}
-                    <div
-                      ref={addressSlotRef}
-                      className={placesReady ? "" : "hidden"}
-                    />
-                  </div>
-                  <div className="md:col-span-2">
-                    <input
-                      name="apartment"
-                      type="text"
-                      placeholder="APARTMENT, SUITE, ETC. (OPTIONAL)"
-                      value={form.apartment}
-                      onChange={handleChange}
-                      className={inputClass}
-                    />
-                  </div>
-                  <input
-                    name="city"
-                    type="text"
-                    required
-                    placeholder="CITY"
-                    value={form.city}
-                    onChange={handleChange}
-                    className={inputClass}
-                  />
-                  <input
-                    name="state"
-                    type="text"
-                    placeholder="STATE / PROVINCE"
-                    value={form.state}
-                    onChange={handleChange}
-                    className={inputClass}
-                  />
-                  <select
-                    name="country"
-                    value={form.country}
-                    onChange={handleChange}
-                    className={`${inputClass} text-outline appearance-none`}
+                  <label
+                    htmlFor="news"
+                    className="text-[10px] tracking-widest uppercase text-on-surface-variant font-label cursor-pointer"
                   >
-                    <option>UNITED STATES</option>
-                    <option>UNITED KINGDOM</option>
-                    <option>JAPAN</option>
-                  </select>
+                    Email me with news and offers
+                  </label>
+                </div>
+              </div>
+            </section>
+
+            <section className="space-y-6 md:space-y-8">
+              <h2 className="text-lg md:text-xl font-bold uppercase tracking-tight font-headline">
+                Shipping Address
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+                <input
+                  name="firstName"
+                  type="text"
+                  required
+                  placeholder="FIRST NAME"
+                  value={form.firstName}
+                  onChange={handleChange}
+                  className={inputClass}
+                />
+                <input
+                  name="lastName"
+                  type="text"
+                  required
+                  placeholder="LAST NAME"
+                  value={form.lastName}
+                  onChange={handleChange}
+                  className={inputClass}
+                />
+                <div className="md:col-span-2">
+                  {/* Manual fallback — used until/unless the Places element
+                      mounts (e.g. library fails to load). Stays React-owned;
+                      the element is mounted into the sibling slot below so the
+                      two never fight over the same DOM node. */}
                   <input
-                    name="postal"
+                    name="address"
                     type="text"
-                    required
-                    placeholder="POSTAL CODE"
-                    value={form.postal}
+                    required={!placesReady}
+                    autoComplete="off"
+                    placeholder="ADDRESS"
+                    value={form.address}
+                    onChange={handleChange}
+                    className={`${inputClass} ${placesReady ? "hidden" : ""}`}
+                  />
+                  {/* Google PlaceAutocompleteElement mounts here */}
+                  <div
+                    ref={addressSlotRef}
+                    className={placesReady ? "" : "hidden"}
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <input
+                    name="apartment"
+                    type="text"
+                    placeholder="APARTMENT, SUITE, ETC. (OPTIONAL)"
+                    value={form.apartment}
                     onChange={handleChange}
                     className={inputClass}
                   />
-                  <div className="md:col-span-2">
-                    <input
-                      name="phone"
-                      type="tel"
-                      placeholder="PHONE (OPTIONAL)"
-                      value={form.phone}
-                      onChange={handleChange}
-                      className={inputClass}
-                    />
-                  </div>
                 </div>
-              </section>
+                <input
+                  name="city"
+                  type="text"
+                  required
+                  placeholder="CITY"
+                  value={form.city}
+                  onChange={handleChange}
+                  className={inputClass}
+                />
+                <input
+                  name="state"
+                  type="text"
+                  placeholder="STATE / PROVINCE"
+                  value={form.state}
+                  onChange={handleChange}
+                  className={inputClass}
+                />
+                <select
+                  name="country"
+                  value={form.country}
+                  onChange={handleChange}
+                  className={`${inputClass} text-outline appearance-none`}
+                >
+                  <option>UNITED STATES</option>
+                  <option>UNITED KINGDOM</option>
+                  <option>JAPAN</option>
+                </select>
+                <input
+                  name="postal"
+                  type="text"
+                  required
+                  placeholder="POSTAL CODE"
+                  value={form.postal}
+                  onChange={handleChange}
+                  className={inputClass}
+                />
+                <div className="md:col-span-2">
+                  <input
+                    name="phone"
+                    type="tel"
+                    placeholder="PHONE (OPTIONAL)"
+                    value={form.phone}
+                    onChange={handleChange}
+                    className={inputClass}
+                  />
+                </div>
+              </div>
+            </section>
 
-              {shippingError && (
-                <p className="text-[11px] tracking-widest uppercase text-red-600 font-label">
-                  {shippingError}
+            {/* Shipping method — live carrier rates. Picking one here is what
+                gives us the accurate amount before we ever reach Stripe. */}
+            <section className="space-y-4">
+              <h2 className="text-lg md:text-xl font-bold uppercase tracking-tight font-headline">
+                Shipping Method
+              </h2>
+              {ratesLoading && (
+                <p className="text-[10px] tracking-widest uppercase text-outline font-label">
+                  Calculating shipping…
                 </p>
               )}
+              {!ratesLoading && ratesError && (
+                <p className="text-[10px] tracking-widest uppercase text-red-600 font-label">
+                  {ratesError}
+                </p>
+              )}
+              {!ratesLoading && !ratesError && rates.length === 0 && (
+                <p className="text-[10px] tracking-widest uppercase text-outline font-label">
+                  Enter your address to see shipping options.
+                </p>
+              )}
+              {!ratesLoading &&
+                rates.map((r) => {
+                  const active = r.token === selectedToken;
+                  return (
+                    <button
+                      key={r.token}
+                      type="button"
+                      onClick={() => setSelectedToken(r.token)}
+                      className={`w-full flex items-center justify-between gap-3 px-4 py-3 border text-left transition-colors ${
+                        active
+                          ? "border-primary bg-surface-container-lowest"
+                          : "border-outline-variant/20 hover:border-outline-variant/50"
+                      }`}
+                    >
+                      <span className="min-w-0">
+                        <span className="block text-[11px] font-bold uppercase tracking-wider font-headline truncate">
+                          {r.provider} · {r.name}
+                        </span>
+                        {r.estimatedDays != null && (
+                          <span className="block text-[10px] text-outline tracking-widest uppercase font-label">
+                            {r.estimatedDays} business day
+                            {r.estimatedDays === 1 ? "" : "s"}
+                          </span>
+                        )}
+                      </span>
+                      <span className="text-sm font-bold font-headline shrink-0">
+                        {money(r.amountCents)}
+                      </span>
+                    </button>
+                  );
+                })}
+            </section>
 
-              {/* Mobile: advance to payment */}
-              <button
-                type="button"
-                onClick={goToPayment}
-                className="md:hidden w-full bg-black text-on-primary px-8 py-4 text-sm font-bold uppercase tracking-widest hover:bg-primary-container active:scale-[0.99] transition-all font-headline"
-              >
-                Continue to Payment
-              </button>
+            {renderSummary()}
 
-              <Link
-                href="/store"
-                className="hidden md:flex items-center gap-2 text-[10px] tracking-widest uppercase text-outline hover:text-primary transition-colors font-label"
-              >
-                <ChevronLeft className="w-4 h-4" />
-                Return to Bag
-              </Link>
-            </div>
+            {shippingError && (
+              <p className="text-[11px] tracking-widest uppercase text-red-600 font-label">
+                {shippingError}
+              </p>
+            )}
 
-            {/* RIGHT — payment + order summary (mobile step 2) */}
-            <aside
-              className={`${rightVisible} md:block md:col-span-5 md:sticky md:top-8 w-full space-y-8`}
+            <button
+              type="button"
+              onClick={goToPayment}
+              disabled={displayItems.length === 0}
+              className="w-full bg-black text-on-primary px-8 py-4 md:py-5 text-sm font-bold uppercase tracking-widest hover:bg-primary-container active:scale-[0.99] transition-all font-headline disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              <section className="space-y-6 md:space-y-8">
-                <h2 className="text-lg md:text-xl font-bold uppercase tracking-tight font-headline">
-                  Payment
-                </h2>
-                <div className="bg-surface-container-lowest border border-outline-variant/20 p-4 md:p-6">
-                  <PaymentElement options={{ layout: "tabs" }} />
-                </div>
-                {payError && (
-                  <p className="text-[11px] tracking-widest uppercase text-red-600 font-label">
-                    {payError}
-                  </p>
-                )}
-              </section>
+              Continue to Payment
+            </button>
 
-              <div className="bg-surface-container-low p-5 sm:p-8 space-y-6">
-                <h2 className="text-base md:text-lg font-bold uppercase tracking-tight font-headline">
-                  Order Summary
-                </h2>
+            <Link
+              href="/store"
+              className="flex items-center justify-center gap-2 text-[10px] tracking-widest uppercase text-outline hover:text-primary transition-colors font-label"
+            >
+              <ChevronLeft className="w-4 h-4" />
+              Return to Bag
+            </Link>
+          </div>
 
-                <div className="space-y-5">
-                  {items.length === 0 ? (
-                    <p className="text-[10px] tracking-widest uppercase text-outline font-label">
-                      YOUR BAG IS EMPTY
-                    </p>
-                  ) : (
-                    items.map((item) => {
-                      const liveProduct =
-                        allProducts.find((p) => p.id === item.product.id) ??
-                        item.product;
-                      return (
-                        <div
-                          key={`${item.product.id}-${item.size}`}
-                          className="flex items-center gap-4 group"
-                        >
-                          <div className="relative w-16 h-16 bg-surface-container-highest flex-shrink-0 overflow-hidden">
-                            <Image
-                              src={liveProduct.images[0]}
-                              alt={liveProduct.name}
-                              fill
-                              className="object-contain grayscale p-2"
-                              sizes="64px"
-                            />
-                            <span className="absolute -top-2 -right-2 bg-primary text-on-primary text-[10px] w-5 h-5 flex items-center justify-center font-bold font-label z-10">
-                              {item.quantity}
-                            </span>
-                          </div>
-                          <div className="flex-grow min-w-0">
-                            <h3 className="text-sm font-bold uppercase tracking-tight font-headline">
-                              {item.product.name}
-                            </h3>
-                            <p className="text-[10px] text-outline tracking-widest mt-1 font-label uppercase">
-                              SIZE: {item.size}
-                            </p>
-                          </div>
-                          <span className="text-sm font-bold font-headline shrink-0">
-                            ${(item.product.price * item.quantity).toFixed(2)}
-                          </span>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-
-                {/* Shipping options (live carrier rates) */}
-                <div className="space-y-3 pt-6 border-t border-outline-variant/20">
-                  <p className="text-[10px] tracking-widest uppercase text-on-surface-variant font-label">
-                    Shipping Method
-                  </p>
-                  {ratesLoading && (
-                    <p className="text-[10px] tracking-widest uppercase text-outline font-label">
-                      Calculating shipping…
-                    </p>
-                  )}
-                  {!ratesLoading && ratesError && (
-                    <p className="text-[10px] tracking-widest uppercase text-red-600 font-label">
-                      {ratesError}
-                    </p>
-                  )}
-                  {!ratesLoading && !ratesError && rates.length === 0 && (
-                    <p className="text-[10px] tracking-widest uppercase text-outline font-label">
-                      Enter your address to see shipping options.
-                    </p>
-                  )}
-                  {!ratesLoading &&
-                    rates.map((r) => {
-                      const active = r.token === selectedToken;
-                      return (
-                        <button
-                          key={r.token}
-                          type="button"
-                          onClick={() => setSelectedToken(r.token)}
-                          className={`w-full flex items-center justify-between gap-3 px-4 py-3 border text-left transition-colors ${
-                            active
-                              ? "border-primary bg-surface-container-lowest"
-                              : "border-outline-variant/20 hover:border-outline-variant/50"
-                          }`}
-                        >
-                          <span className="min-w-0">
-                            <span className="block text-[11px] font-bold uppercase tracking-wider font-headline truncate">
-                              {r.provider} · {r.name}
-                            </span>
-                            {r.estimatedDays != null && (
-                              <span className="block text-[10px] text-outline tracking-widest uppercase font-label">
-                                {r.estimatedDays} business day
-                                {r.estimatedDays === 1 ? "" : "s"}
-                              </span>
-                            )}
-                          </span>
-                          <span className="text-sm font-bold font-headline shrink-0">
-                            {money(r.amountCents)}
-                          </span>
-                        </button>
-                      );
-                    })}
-                </div>
-
-                <div className="space-y-4 pt-6 border-t border-outline-variant/20">
-                  <div className="flex justify-between text-[10px] tracking-widest uppercase text-on-surface-variant font-label">
-                    <span>Subtotal</span>
-                    <span>${subtotal.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between text-[10px] tracking-widest uppercase text-on-surface-variant font-label">
-                    <span>Estimated Taxes</span>
-                    <span>${taxes.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between text-[10px] tracking-widest uppercase text-on-surface-variant font-label">
-                    <span>Shipping</span>
-                    <span>{selectedRate ? `$${shippingCost.toFixed(2)}` : "—"}</span>
-                  </div>
-                  <div className="flex justify-between items-baseline pt-4 border-t border-outline-variant/20">
-                    <span className="text-base md:text-lg font-bold uppercase tracking-tight font-headline">
-                      Total
-                    </span>
-                    <div className="text-right">
-                      <span className="text-[10px] text-outline tracking-widest mr-2 font-label">
-                        USD
-                      </span>
-                      <span className="text-lg md:text-xl font-bold font-headline">
-                        ${total.toFixed(2)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={
-                    !stripe ||
-                    submitting ||
-                    items.length === 0 ||
-                    !selectedToken ||
-                    ratesLoading
-                  }
-                  className="w-full bg-black text-on-primary px-8 py-4 md:py-5 text-sm font-bold uppercase tracking-widest hover:bg-primary-container active:scale-[0.99] transition-all font-headline disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {submitting ? "Processing…" : `Pay $${total.toFixed(2)}`}
-                </button>
-
-                {/* Mobile: back to shipping */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setStep("shipping");
-                    window.scrollTo({ top: 0, behavior: "smooth" });
-                  }}
-                  className="md:hidden w-full flex items-center justify-center gap-2 text-[10px] tracking-widest uppercase text-outline hover:text-primary transition-colors font-label"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                  Edit shipping
-                </button>
+          {/* STEP 2 — payment with the now-accurate total */}
+          <div
+            className={
+              step === "payment" ? "block space-y-10 md:space-y-12" : "hidden"
+            }
+          >
+            <section className="space-y-6 md:space-y-8">
+              <h2 className="text-lg md:text-xl font-bold uppercase tracking-tight font-headline">
+                Payment
+              </h2>
+              <div className="bg-surface-container-lowest border border-outline-variant/20 p-4 md:p-6">
+                <PaymentElement options={{ layout: "tabs" }} />
               </div>
-            </aside>
+              {payError && (
+                <p className="text-[11px] tracking-widest uppercase text-red-600 font-label">
+                  {payError}
+                </p>
+              )}
+            </section>
+
+            {renderSummary()}
+
+            <button
+              type="submit"
+              disabled={
+                !stripe ||
+                submitting ||
+                displayItems.length === 0 ||
+                !selectedToken ||
+                ratesLoading
+              }
+              className="w-full bg-black text-on-primary px-8 py-4 md:py-5 text-sm font-bold uppercase tracking-widest hover:bg-primary-container active:scale-[0.99] transition-all font-headline disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {submitting ? "Processing…" : `Pay $${total.toFixed(2)}`}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setStep("shipping");
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+              className="w-full flex items-center justify-center gap-2 text-[10px] tracking-widest uppercase text-outline hover:text-primary transition-colors font-label"
+            >
+              <ChevronLeft className="w-4 h-4" />
+              Edit shipping
+            </button>
           </div>
         </main>
       </form>
