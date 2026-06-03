@@ -48,7 +48,7 @@ export default function CartDrawer() {
               {items.length === 0 ? (
                 <div className="flex-1 flex items-center justify-center">
                   <span className="font-label text-[10px] text-neutral-400 uppercase tracking-[0.3em]">
-                    COMING SOON
+                    YOUR CART IS EMPTY
                   </span>
                 </div>
               ) : (

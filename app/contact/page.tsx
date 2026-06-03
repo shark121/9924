@@ -2,7 +2,7 @@ import LegalLayout from "@/app/components/LegalLayout";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Contact — 9924",
+  title: "Contact · 9924",
   description: "Reach 9924 and Ahyensode Creative Agency.",
 };
 

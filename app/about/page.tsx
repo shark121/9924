@@ -3,7 +3,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "About — 9924",
+  title: "About 9924",
   description:
     "9924 is a contemporary lifestyle brand shaped through timeless style, movement and identity. Operated by Ahyensode Creative Agency.",
 };
@@ -19,22 +19,18 @@ const pillars = [
   },
   {
     title: "Evolution",
-    body: "A brand shaped through movement, creativity, and continuous growth — each release building on the last.",
+    body: "A brand shaped through movement, creativity, and continuous growth, each release building on the last.",
   },
 ];
 
 export default function AboutPage() {
   return (
     <LegalLayout eyebrow="THE BRAND" title="About 9924">
-      <p className="font-headline text-xl sm:text-2xl md:text-3xl leading-tight tracking-tight text-primary uppercase font-bold">
-        Presence is carried, not announced.
-      </p>
-
       <p>
         9924 is a contemporary lifestyle brand shaped through timeless style,
         movement and identity. Built around the idea that presence is carried,
-        not announced, the brand explores clothing as an extension of character
-        — refined essentials designed to move naturally across generations,
+        not announced, the brand explores clothing as an extension of character,
+        refined essentials designed to move naturally across generations,
         places and everyday life.
       </p>
 
@@ -47,7 +43,7 @@ export default function AboutPage() {
 
       <p>
         Blending contemporary sportswear, classic influence and cultural
-        storytelling, 9924 creates pieces designed without limits — timeless
+        storytelling, 9924 creates pieces designed without limits, timeless
         clothing for individuals drawn to expression, sophistication and
         movement. More than fashion, 9924 is an evolving world shaped through
         design, storytelling and purpose.

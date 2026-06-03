@@ -1,15 +1,16 @@
 import { products } from "@/lib/data";
+import { COUNTRIES } from "@/lib/countries";
 
 // Shippo multi-carrier rates API. Token is server-only; never expose to client.
 const SHIPPO_TOKEN = process.env.SHIPPO_API_TOKEN;
 const SHIPPO_BASE = "https://api.goshippo.com";
 
 // Human-readable form labels -> ISO 3166-1 alpha-2 (what carriers/Stripe expect).
-export const COUNTRY_CODE: Record<string, string> = {
-  "UNITED STATES": "US",
-  "UNITED KINGDOM": "GB",
-  JAPAN: "JP",
-};
+// Built from the shared country list so the <select>, this map, and the address
+// autocomplete can never drift apart. Keys are upper-cased names.
+export const COUNTRY_CODE: Record<string, string> = Object.fromEntries(
+  COUNTRIES.map((c) => [c.name.toUpperCase(), c.code])
+);
 
 export type IncomingItem = { productId: string; size: string; quantity: number };
 
@@ -37,21 +38,33 @@ export type NormalizedRate = {
   estimatedDays: number | null;
 };
 
-// Flat-rate fallback used when the carrier API returns no quotes for an
-// address. Better to offer a fixed price and complete the sale than to dead-end
-// the customer with "no options found". Stable token so the payment-intent
-// re-price (getRateByToken) resolves to the same rate. Tune via env.
-const FLAT_FALLBACK_CENTS = Math.round(
-  Number(process.env.SHIP_FLAT_FALLBACK_USD ?? "15") * 100
+// Shipping policy: free to the origin country (domestic), one flat fee for
+// everyone else (international). Live carrier quotes are still fetched, but only
+// for service names and delivery estimates — the amount charged follows this
+// policy, not the carrier's number. Tune both via env.
+const INTL_FLAT_CENTS = Math.round(
+  Number(process.env.SHIP_INTL_FLAT_USD ?? "30") * 100
 );
-const FLAT_FALLBACK_RATE: NormalizedRate = {
-  token: "flat_standard",
-  name: "Standard Shipping",
-  provider: "Standard",
-  amountCents: FLAT_FALLBACK_CENTS,
-  currency: "USD",
-  estimatedDays: null,
-};
+const ORIGIN_COUNTRY = (process.env.SHIP_FROM_COUNTRY ?? "US").toUpperCase();
+
+// 0 for domestic, the flat international fee for everywhere else.
+function shippingCentsFor(country: string): number {
+  return country.toUpperCase() === ORIGIN_COUNTRY ? 0 : INTL_FLAT_CENTS;
+}
+
+// A guaranteed selectable option when no carrier quote comes back, so checkout
+// never dead-ends. Priced by the same policy as the live rates. Stable token so
+// the payment-intent re-price (getRateByToken) resolves to the same rate.
+function flatFallbackRate(country: string): NormalizedRate {
+  return {
+    token: "flat_standard",
+    name: "Standard Shipping",
+    provider: "Standard",
+    amountCents: shippingCentsFor(country),
+    currency: "USD",
+    estimatedDays: null,
+  };
+}
 
 // Jerseys are light and similar; a flat per-item estimate inside one poly mailer
 // is plenty for a rate quote. Tune via env without touching code.
@@ -125,9 +138,8 @@ function toAddressTo(s: ShippingAddressInput) {
   };
 }
 
-// Diagnostics about a rate lookup, surfaced to the client so the Shippo
-// outcome is visible in the browser console — not just the server logs. Never
-// contains the API token or any secret.
+// Server-only diagnostics about a rate lookup. Kept for the application logs;
+// never returned to the client. Never contains the API token or any secret.
 export type ShippoDebug = {
   tokenPresent: boolean;
   destination: {
@@ -172,7 +184,7 @@ export async function getRatesWithDebug(
     console.warn(`[shipping] ${msg}`);
     debug.usedFallback = true;
     debug.messages.push(msg);
-    return { rates: [FLAT_FALLBACK_RATE], debug };
+    return { rates: [flatFallbackRate(addressTo.country)], debug };
   }
 
   const qty = Math.max(1, totalQuantity(items));
@@ -212,7 +224,7 @@ export async function getRatesWithDebug(
       e instanceof Error ? e.message : String(e)
     }`;
     debug.messages.push(debug.error);
-    return { rates: [FLAT_FALLBACK_RATE], debug };
+    return { rates: [flatFallbackRate(addressTo.country)], debug };
   }
 
   debug.httpStatus = res.status;
@@ -225,7 +237,7 @@ export async function getRatesWithDebug(
     debug.usedFallback = true;
     debug.error = `Shippo HTTP ${res.status}: ${detail.slice(0, 300)}`;
     debug.messages.push(debug.error);
-    return { rates: [FLAT_FALLBACK_RATE], debug };
+    return { rates: [flatFallbackRate(addressTo.country)], debug };
   }
 
   const data = (await res.json()) as {
@@ -256,7 +268,9 @@ export async function getRatesWithDebug(
       token: r.servicelevel!.token!,
       name: r.servicelevel!.name ?? "Shipping",
       provider: r.provider,
-      amountCents: Math.round(parseFloat(r.amount) * 100),
+      // Ignore the carrier's quoted amount; charge by policy (free domestic,
+      // flat international) based on the destination country.
+      amountCents: shippingCentsFor(addressTo.country),
       currency: (r.currency ?? "USD").toUpperCase(),
       estimatedDays: r.estimated_days ?? null,
     }))
@@ -280,7 +294,7 @@ export async function getRatesWithDebug(
       `Destination: ${JSON.stringify(debug.destination)}.` +
       (debug.messages.length ? ` Messages: ${debug.messages.join(" | ")}` : "")
   );
-  return { rates: [FLAT_FALLBACK_RATE], debug };
+  return { rates: [flatFallbackRate(addressTo.country)], debug };
 }
 
 // Fetch live rate quotes for a destination + cart. Returns cheapest-first.

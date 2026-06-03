@@ -26,16 +26,15 @@ export async function POST(request: NextRequest) {
 
   try {
     assertValidItems(body.items);
-    const { rates, debug } = await getRatesWithDebug(a, body.items);
+    // Diagnostics stay server-side (logs only); never echoed to the client.
+    const { rates } = await getRatesWithDebug(a, body.items);
     if (!rates.length) {
       return Response.json(
-        { error: "No shipping options for this address.", debug },
+        { error: "No shipping options for this address." },
         { status: 422 }
       );
     }
-    // `debug` lets the client mirror the Shippo outcome (status, messages,
-    // whether the flat fallback was used) into the browser console.
-    return Response.json({ rates, debug });
+    return Response.json({ rates });
   } catch (e) {
     const msg = typeof e === "string" ? e : "Could not fetch shipping rates.";
     return Response.json({ error: msg }, { status: 400 });

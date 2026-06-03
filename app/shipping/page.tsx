@@ -2,7 +2,7 @@ import LegalLayout from "@/app/components/LegalLayout";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Returns & Shipping — 9924",
+  title: "Returns & Shipping · 9924",
   description: "Return, refund, and shipping information for 9924 orders.",
 };
 
@@ -80,26 +80,36 @@ export default function ShippingPage() {
 
         <div className="space-y-8">
           <Section title="1. Processing Time">
-            <p>Orders are typically processed within 2–5 business days.</p>
+            <p>Orders are typically processed within 2 to 5 business days.</p>
           </Section>
 
-          <Section title="2. Shipping Times">
+          <Section title="2. Shipping Rates">
+            <p>
+              Domestic shipping is free. International shipping is a flat $30,
+              applied at checkout.
+            </p>
+          </Section>
+
+          <Section title="3. Shipping Times">
             <p>Delivery times may vary based on location and carrier.</p>
           </Section>
 
-          <Section title="3. Tracking">
+          <Section title="4. Tracking">
             <p>Tracking information will be sent via email once your order ships.</p>
           </Section>
 
-          <Section title="4. Delays">
+          <Section title="5. Delays">
             <p>
               9924 and Ahyensode Creative Agency are not responsible for delays caused by
               carriers, weather, or customs.
             </p>
           </Section>
 
-          <Section title="5. International Shipping">
-            <p>International customers may be responsible for customs fees or import taxes.</p>
+          <Section title="6. International Shipping">
+            <p>
+              International shipping is a flat $30. Customers may also be responsible for
+              customs fees or import taxes charged by the destination country.
+            </p>
           </Section>
         </div>
       </div>

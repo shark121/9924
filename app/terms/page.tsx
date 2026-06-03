@@ -2,7 +2,7 @@ import LegalLayout from "@/app/components/LegalLayout";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Terms & Conditions — 9924",
+  title: "Terms & Conditions · 9924",
   description: "Terms & Conditions for 9924, operated by Ahyensode Creative Agency.",
 };
 

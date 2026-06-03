@@ -2,7 +2,7 @@ import LegalLayout from "@/app/components/LegalLayout";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy — 9924",
+  title: "Privacy Policy · 9924",
   description: "How 9924 and Ahyensode Creative Agency collect, use, and protect your information.",
 };
 

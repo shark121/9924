@@ -43,7 +43,7 @@ export const products: Product[] = [
     name: "PG-01 / GOLD COAST",
     price: 70,
     description:
-      "A premium pinstriped jersey inspired by African heritage, leadership and cultural pride. The chest features a silhouette emblem inspired by the iconic Kwame Nkrumah statue — symbolizing vision, independence and progress. The sleeves incorporate bold red, gold and green paneling accented with the Black Star, a tribute to unity, strength and African identity. Designed with breathable lightweight fabric, structured collar detailing and a modern oversized athletic silhouette, the jersey blends heritage symbolism with contemporary streetwear aesthetics.",
+      "A premium pinstriped jersey inspired by African heritage, leadership and cultural pride. The chest features a silhouette emblem inspired by the iconic Kwame Nkrumah statue, symbolizing vision, independence and progress. The sleeves incorporate bold red, gold and green paneling accented with the Black Star, a tribute to unity, strength and African identity. Designed with breathable lightweight fabric, structured collar detailing and a modern oversized athletic silhouette, the jersey blends heritage symbolism with contemporary streetwear aesthetics.",
     images: [IMG.white_front, IMG.white_back],
     sizes: ["S", "M", "L", "XL"],
     category: "polo",
@@ -55,7 +55,7 @@ export const products: Product[] = [
     name: "PG-02 / GOLD COAST",
     price: 70,
     description:
-      "A premium pinstriped jersey inspired by African heritage, leadership and cultural pride. The chest features a silhouette emblem inspired by the iconic Kwame Nkrumah statue — symbolizing vision, independence and progress. The sleeves incorporate bold red, gold and green paneling accented with the Black Star, a tribute to unity, strength and African identity. Designed with breathable lightweight fabric, structured collar detailing and a modern oversized athletic silhouette, the jersey blends heritage symbolism with contemporary streetwear aesthetics.",
+      "A premium pinstriped jersey inspired by African heritage, leadership and cultural pride. The chest features a silhouette emblem inspired by the iconic Kwame Nkrumah statue, symbolizing vision, independence and progress. The sleeves incorporate bold red, gold and green paneling accented with the Black Star, a tribute to unity, strength and African identity. Designed with breathable lightweight fabric, structured collar detailing and a modern oversized athletic silhouette, the jersey blends heritage symbolism with contemporary streetwear aesthetics.",
     images: [IMG.black_front, IMG.black_back],
     sizes: ["S", "M", "L", "XL"],
     category: "polo",

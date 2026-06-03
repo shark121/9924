@@ -76,7 +76,7 @@ export default function ProductModal({ product, onClose }: ProductModalProps) {
               >
                 <Image
                   src={product.images[currentImageIdx]}
-                  alt={`${product.name} — view ${currentImageIdx + 1}`}
+                  alt={`${product.name} view ${currentImageIdx + 1}`}
                   fill
                   className="object-contain mix-blend-multiply p-8 sm:p-12 md:p-16"
                   priority

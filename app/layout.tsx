@@ -19,7 +19,7 @@ const spaceGrotesk = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: "9924 — Streetwear, creativity, and lifestyle designed to move differently.",
+  title: "9924.store",
   description:
     "9924 is a modern lifestyle brand built around timeless style, confidence, and everyday expression. Operated by Ahyensode Creative Agency.",
 };

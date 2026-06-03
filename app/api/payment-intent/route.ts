@@ -69,6 +69,8 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Shipping follows the free-domestic / flat-international policy, re-priced
+  // server-side from the selected rate so the charge can't be forged.
   const shippingCents = rate.amountCents;
   const totalCents = subtotalCents + taxCents + shippingCents;
 

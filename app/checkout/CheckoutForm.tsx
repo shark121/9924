@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { setOptions, importLibrary } from "@googlemaps/js-api-loader";
 import { useCartStore } from "@/store/cartStore";
 import { products as allProducts } from "@/lib/data";
+import { COUNTRIES } from "@/lib/countries";
 import { useStripe, useElements, PaymentElement } from "@stripe/react-stripe-js";
 import Image from "next/image";
 import Link from "next/link";
@@ -23,44 +24,11 @@ type Rate = {
   estimatedDays: number | null;
 };
 
-// Mirrors lib/shipping.ts ShippoDebug — the Shippo outcome the API echoes back
-// so we can surface it in the browser console (no server access needed).
-type ShippoDebug = {
-  tokenPresent: boolean;
-  destination: Record<string, string>;
-  httpStatus: number | null;
-  rateCount: number;
-  usedFallback: boolean;
-  messages: string[];
-  error?: string;
-};
-
-// Print the server's Shippo diagnostics to the browser console. When the flat
-// $15 fallback was used, it's shown in red with the exact reason(s) Shippo gave.
-function logShippoDebug(debug?: ShippoDebug) {
-  if (!debug) return;
-  const headline = debug.usedFallback
-    ? "[shippo] ⚠ FLAT $15 FALLBACK used"
-    : `[shippo] ✓ ${debug.rateCount} live rate(s)`;
-  console.groupCollapsed(
-    `%c${headline}`,
-    `color:${debug.usedFallback ? "#c0392b" : "#27ae60"};font-weight:bold`
-  );
-  console.log("tokenPresent:", debug.tokenPresent);
-  console.log("httpStatus:", debug.httpStatus);
-  console.log("rateCount:", debug.rateCount);
-  console.log("destination:", debug.destination);
-  if (debug.error) console.error("error:", debug.error);
-  if (debug.messages.length) console.warn("messages:", debug.messages);
-  console.groupEnd();
-}
-
-// Places country code -> our select label
-const ISO_TO_LABEL: Record<string, string> = {
-  US: "UNITED STATES",
-  GB: "UNITED KINGDOM",
-  JP: "JAPAN",
-};
+// Places country code -> our select label (upper-cased name). Built from the
+// shared country list so it stays in sync with the <select> options below.
+const ISO_TO_LABEL: Record<string, string> = Object.fromEntries(
+  COUNTRIES.map((c) => [c.code, c.name.toUpperCase()])
+);
 
 export default function CheckoutForm() {
   const stripe = useStripe();
@@ -96,7 +64,7 @@ export default function CheckoutForm() {
   const [shippingError, setShippingError] = useState<string | null>(null);
   const [payError, setPayError] = useState<string | null>(null);
 
-  // Live shipping rates from Shippo.
+  // Live shipping options.
   const [rates, setRates] = useState<Rate[]>([]);
   const [selectedToken, setSelectedToken] = useState<string | null>(null);
   const [ratesLoading, setRatesLoading] = useState(false);
@@ -209,7 +177,6 @@ export default function CheckoutForm() {
     }
     places.AutocompleteSuggestion.fetchAutocompleteSuggestions({
       input,
-      includedRegionCodes: ["us", "gb", "jp"],
       sessionToken: sessionTokenRef.current,
     })
       .then(({ suggestions: results }) => {
@@ -333,7 +300,6 @@ export default function CheckoutForm() {
           }),
         });
         const data = await res.json();
-        logShippoDebug(data.debug);
         if (!res.ok) {
           setRates([]);
           setSelectedToken(null);
@@ -484,7 +450,9 @@ export default function CheckoutForm() {
     }
   };
 
-  const money = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+  // "FREE" for domestic ($0), otherwise the dollar amount (e.g. international).
+  const priceLabel = (cents: number) =>
+    cents === 0 ? "FREE" : `$${(cents / 100).toFixed(2)}`;
 
   // Shared order summary (items + running totals). Rendered on both steps so
   // the customer always sees the price they're about to pay — including the
@@ -549,7 +517,7 @@ export default function CheckoutForm() {
         </div>
         <div className="flex justify-between text-[10px] tracking-widest uppercase text-on-surface-variant font-label">
           <span>Shipping</span>
-          <span>{selectedRate ? `$${shippingCost.toFixed(2)}` : "—"}</span>
+          <span>{selectedRate ? priceLabel(selectedRate.amountCents) : "TBD"}</span>
         </div>
         <div className="flex justify-between items-baseline pt-4 border-t border-outline-variant/20">
           <span className="text-base md:text-lg font-bold uppercase tracking-tight font-headline">
@@ -753,9 +721,9 @@ export default function CheckoutForm() {
                   onChange={handleChange}
                   className={`${inputClass} text-outline appearance-none`}
                 >
-                  <option>UNITED STATES</option>
-                  <option>UNITED KINGDOM</option>
-                  <option>JAPAN</option>
+                  {COUNTRIES.map((c) => (
+                    <option key={c.code}>{c.name.toUpperCase()}</option>
+                  ))}
                 </select>
                 <input
                   name="postal"
@@ -826,7 +794,7 @@ export default function CheckoutForm() {
                         )}
                       </span>
                       <span className="text-sm font-bold font-headline shrink-0">
-                        {money(r.amountCents)}
+                        {priceLabel(r.amountCents)}
                       </span>
                     </button>
                   );

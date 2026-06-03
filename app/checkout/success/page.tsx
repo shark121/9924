@@ -28,7 +28,7 @@ const COPY: Record<
   processing: {
     eyebrow: "Payment Processing",
     heading: "Almost there",
-    body: "Your payment is processing. We'll email you a confirmation as soon as it clears — no need to pay again.",
+    body: "Your payment is processing. We'll email you a confirmation as soon as it clears. No need to pay again.",
     cta: "Continue Shopping",
     href: "/store",
   },
