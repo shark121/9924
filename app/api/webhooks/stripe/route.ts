@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { getStripe } from "@/lib/stripe";
+import { recordOrder } from "@/lib/orders-db";
 import Stripe from "stripe";
 
 export const runtime = "nodejs";
@@ -30,7 +31,13 @@ export async function POST(request: NextRequest) {
   switch (event.type) {
     case "payment_intent.succeeded": {
       const pi = event.data.object;
-      // TODO: persist order to DB when one exists
+      try {
+        recordOrder(pi);
+      } catch (err) {
+        // Don't fail the webhook (Stripe would retry) if persistence hiccups —
+        // log it so the order can be recovered from the Stripe dashboard.
+        console.error("[stripe] failed to persist order", pi.id, err);
+      }
       console.log("[stripe] paid", {
         id: pi.id,
         amount: pi.amount,

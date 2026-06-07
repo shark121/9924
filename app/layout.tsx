@@ -19,9 +19,9 @@ const spaceGrotesk = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: "9924.store",
+  title: "9924 | Culture. Creativity. Purpose.",
   description:
-    "9924 is a modern lifestyle brand built around timeless style, confidence, and everyday expression. Operated by Ahyensode Creative Agency.",
+    "Built on culture, creativity and purpose. Discover the world of 9924.",
 };
 
 export default function RootLayout({
