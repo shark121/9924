@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { getStripe } from "@/lib/stripe";
-import { products } from "@/lib/data";
+import { listProducts } from "@/lib/products-db";
 import {
   assertValidItems,
   getRateByToken,
@@ -34,7 +34,9 @@ export async function POST(request: NextRequest) {
 
   // Price the cart server-side — never trust client amounts.
   let subtotalCents = 0;
-  const productMap = new Map(products.map((p) => [p.id, p]));
+  const productMap = new Map(
+    listProducts({ includeArchived: true }).map((p) => [p.id, p])
+  );
   const lineMeta: { name: string; size: string; qty: number }[] = [];
   for (const item of body.items) {
     const product = productMap.get(item.productId)!;

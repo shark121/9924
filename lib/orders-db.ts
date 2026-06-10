@@ -1,25 +1,26 @@
-import { DatabaseSync } from "node:sqlite";
-import { mkdirSync } from "node:fs";
-import { dirname, join } from "node:path";
+import type { DatabaseSync } from "node:sqlite";
 import type Stripe from "stripe";
+import { getDb as getSharedDb, ensureColumn } from "@/lib/db";
 
 // Persistent order store backed by SQLite (Node's built-in `node:sqlite`).
 // Every successful order is written here from the Stripe webhook, capturing the
 // amounts, line items, and full shipping address so we have a durable record
-// independent of the Stripe dashboard.
+// independent of the Stripe dashboard. The admin UI adds fulfillment and refund
+// tracking on top via the columns added by the migration below.
 
-let _db: DatabaseSync | null = null;
+export type FulfillmentStatus =
+  | "unfulfilled"
+  | "processing"
+  | "shipped"
+  | "delivered"
+  | "cancelled";
+
+let _ready = false;
 
 function getDb(): DatabaseSync {
-  if (_db) return _db;
+  const db = getSharedDb();
+  if (_ready) return db;
 
-  // Default to a gitignored `data/` dir at the project root; override with
-  // ORDERS_DB_PATH (e.g. a mounted volume in production).
-  const dbPath = process.env.ORDERS_DB_PATH || join(process.cwd(), "data", "orders.db");
-  mkdirSync(dirname(dbPath), { recursive: true });
-
-  const db = new DatabaseSync(dbPath);
-  db.exec("PRAGMA journal_mode = WAL");
   db.exec(`
     CREATE TABLE IF NOT EXISTS orders (
       payment_intent_id   TEXT PRIMARY KEY,
@@ -45,8 +46,19 @@ function getDb(): DatabaseSync {
     )
   `);
 
-  _db = db;
-  return _db;
+  // Additive migration so databases created before the admin UI keep working.
+  ensureColumn(db, "orders", "fulfillment_status",
+    "fulfillment_status TEXT NOT NULL DEFAULT 'unfulfilled'");
+  ensureColumn(db, "orders", "tracking_number", "tracking_number TEXT");
+  ensureColumn(db, "orders", "tracking_carrier", "tracking_carrier TEXT");
+  ensureColumn(db, "orders", "refund_status", "refund_status TEXT");
+  ensureColumn(db, "orders", "refunded_cents",
+    "refunded_cents INTEGER NOT NULL DEFAULT 0");
+  ensureColumn(db, "orders", "refund_id", "refund_id TEXT");
+  ensureColumn(db, "orders", "updated_at", "updated_at TEXT");
+
+  _ready = true;
+  return db;
 }
 
 function toInt(value: string | undefined): number | null {
@@ -75,21 +87,104 @@ export interface OrderRow {
   ship_state: string | null;
   ship_postal_code: string | null;
   ship_country: string | null;
+  fulfillment_status: FulfillmentStatus;
+  tracking_number: string | null;
+  tracking_carrier: string | null;
+  refund_status: string | null;
+  refunded_cents: number;
+  refund_id: string | null;
+  updated_at: string | null;
 }
 
-/** Every order, newest first. */
-export function listOrders(): OrderRow[] {
-  const db = getDb();
-  return db
-    .prepare(
-      `SELECT payment_intent_id, created_at, status, email, currency, amount_cents,
+const SELECT_COLS = `payment_intent_id, created_at, status, email, currency, amount_cents,
               subtotal_cents, tax_cents, shipping_cents, shipping_service, items,
               ship_name, ship_phone, ship_line1, ship_line2, ship_city, ship_state,
-              ship_postal_code, ship_country
-         FROM orders
-        ORDER BY created_at DESC`
+              ship_postal_code, ship_country, fulfillment_status, tracking_number,
+              tracking_carrier, refund_status, refunded_cents, refund_id, updated_at`;
+
+export interface OrderFilter {
+  q?: string; // matches email / payment intent id / ship name
+  status?: string; // Stripe payment status
+  fulfillment?: string; // FulfillmentStatus
+}
+
+/** Orders newest first, optionally filtered by search text / status. */
+export function listOrders(filter?: OrderFilter): OrderRow[] {
+  const where: string[] = [];
+  const params: string[] = [];
+  if (filter?.q) {
+    where.push(
+      "(email LIKE ? OR payment_intent_id LIKE ? OR ship_name LIKE ?)"
+    );
+    const like = `%${filter.q}%`;
+    params.push(like, like, like);
+  }
+  if (filter?.status) {
+    where.push("status = ?");
+    params.push(filter.status);
+  }
+  if (filter?.fulfillment) {
+    where.push("fulfillment_status = ?");
+    params.push(filter.fulfillment);
+  }
+  const clause = where.length ? `WHERE ${where.join(" AND ")}` : "";
+  return getDb()
+    .prepare(
+      `SELECT ${SELECT_COLS} FROM orders ${clause} ORDER BY created_at DESC`
     )
-    .all() as unknown as OrderRow[];
+    .all(...params) as unknown as OrderRow[];
+}
+
+export function getOrder(paymentIntentId: string): OrderRow | null {
+  const row = getDb()
+    .prepare(`SELECT ${SELECT_COLS} FROM orders WHERE payment_intent_id = ?`)
+    .get(paymentIntentId) as OrderRow | undefined;
+  return row ?? null;
+}
+
+/** Update fulfillment status and optional tracking for an order. */
+export function updateFulfillment(
+  paymentIntentId: string,
+  patch: {
+    status: FulfillmentStatus;
+    trackingNumber?: string | null;
+    trackingCarrier?: string | null;
+  }
+): void {
+  getDb()
+    .prepare(
+      `UPDATE orders SET
+         fulfillment_status = ?, tracking_number = ?, tracking_carrier = ?,
+         updated_at = ?
+       WHERE payment_intent_id = ?`
+    )
+    .run(
+      patch.status,
+      patch.trackingNumber ?? null,
+      patch.trackingCarrier ?? null,
+      new Date().toISOString(),
+      paymentIntentId
+    );
+}
+
+/** Record a Stripe refund against an order. */
+export function recordRefund(
+  paymentIntentId: string,
+  patch: { refundId: string; refundedCents: number; refundStatus: string }
+): void {
+  getDb()
+    .prepare(
+      `UPDATE orders SET
+         refund_id = ?, refunded_cents = ?, refund_status = ?, updated_at = ?
+       WHERE payment_intent_id = ?`
+    )
+    .run(
+      patch.refundId,
+      patch.refundedCents,
+      patch.refundStatus,
+      new Date().toISOString(),
+      paymentIntentId
+    );
 }
 
 /**

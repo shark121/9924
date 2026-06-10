@@ -1,4 +1,5 @@
-import { products } from "@/lib/data";
+import { listProducts } from "@/lib/products-db";
+import { getSetting } from "@/lib/settings-db";
 import { COUNTRIES } from "@/lib/countries";
 
 // Shippo multi-carrier rates API. Token is server-only; never expose to client.
@@ -41,15 +42,31 @@ export type NormalizedRate = {
 // Shipping policy: free to the origin country (domestic), one flat fee for
 // everyone else (international). Live carrier quotes are still fetched, but only
 // for service names and delivery estimates — the amount charged follows this
-// policy, not the carrier's number. Tune both via env.
-const INTL_FLAT_CENTS = Math.round(
-  Number(process.env.SHIP_INTL_FLAT_USD ?? "30") * 100
-);
-const ORIGIN_COUNTRY = (process.env.SHIP_FROM_COUNTRY ?? "US").toUpperCase();
+// policy, not the carrier's number. Values are read per-call so the admin
+// Settings page can change them (DB override) without a redeploy, falling back
+// to env, then to defaults.
+export function getShippingPolicy(): {
+  intlFlatCents: number;
+  originCountry: string;
+} {
+  const intlFlatUsd = Number(
+    getSetting("ship_intl_flat_usd") ?? process.env.SHIP_INTL_FLAT_USD ?? "30"
+  );
+  const originCountry = (
+    getSetting("ship_from_country") ??
+    process.env.SHIP_FROM_COUNTRY ??
+    "US"
+  ).toUpperCase();
+  return {
+    intlFlatCents: Math.round((Number.isFinite(intlFlatUsd) ? intlFlatUsd : 30) * 100),
+    originCountry,
+  };
+}
 
 // 0 for domestic, the flat international fee for everywhere else.
 function shippingCentsFor(country: string): number {
-  return country.toUpperCase() === ORIGIN_COUNTRY ? 0 : INTL_FLAT_CENTS;
+  const { intlFlatCents, originCountry } = getShippingPolicy();
+  return country.toUpperCase() === originCountry ? 0 : intlFlatCents;
 }
 
 // A guaranteed selectable option when no carrier quote comes back, so checkout
@@ -95,7 +112,11 @@ export function totalQuantity(items: IncomingItem[]): number {
 
 // Validate items against the catalog. Throws a user-safe string on bad input.
 export function assertValidItems(items: IncomingItem[]): void {
-  const map = new Map(products.map((p) => [p.id, p]));
+  // Include archived products so a cart formed before a product was archived can
+  // still complete checkout.
+  const map = new Map(
+    listProducts({ includeArchived: true }).map((p) => [p.id, p])
+  );
   for (const it of items) {
     const p = map.get(it.productId);
     if (!p) throw `Unknown product: ${it.productId}`;

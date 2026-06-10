@@ -1,7 +1,6 @@
 "use client";
 
 import { useCartStore } from "@/store/cartStore";
-import { products as allProducts } from "@/lib/data";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Minus, Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -53,7 +52,7 @@ export default function CartDrawer() {
                 </div>
               ) : (
                 items.map((item) => {
-                  const liveProduct = allProducts.find(p => p.id === item.product.id) ?? item.product;
+                  const liveProduct = item.product;
                   return (
                   <div
                     key={`${item.product.id}-${item.size}`}

@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import { setOptions, importLibrary } from "@googlemaps/js-api-loader";
 import { useCartStore } from "@/store/cartStore";
-import { products as allProducts } from "@/lib/data";
 import { COUNTRIES } from "@/lib/countries";
 import { useStripe, useElements, PaymentElement } from "@stripe/react-stripe-js";
 import Image from "next/image";
@@ -470,8 +469,8 @@ export default function CheckoutForm() {
           </p>
         ) : (
           displayItems.map((item) => {
-            const liveProduct =
-              allProducts.find((p) => p.id === item.product.id) ?? item.product;
+            // The cart persists the full product snapshot, so use it directly.
+            const liveProduct = item.product;
             return (
               <div
                 key={`${item.product.id}-${item.size}`}

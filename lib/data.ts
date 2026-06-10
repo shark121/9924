@@ -36,7 +36,11 @@ const IMG = {
   black_front: "/products/9924 Jerseys front black .jpg.jpeg",
 };
 
-export const products: Product[] = [
+// Seed catalog. This is no longer the live source of truth — products are
+// served from SQLite (see lib/products-db.ts), which seeds itself from this
+// array the first time the products table is empty. Edit products from the
+// admin UI; this array only matters for a fresh database.
+export const SEED_PRODUCTS: Product[] = [
   {
     id: "prod_01",
     sku: "0101-BLK-24",
@@ -135,12 +139,5 @@ export const products: Product[] = [
   // },
 ];
 
-// derived helpers
-export const collections = [...new Set(products.map((p) => p.collection))];
-
-export const productsByCollection = collections.reduce<
-  Record<string, Product[]>
->((acc, col) => {
-  acc[col] = products.filter((p) => p.collection === col);
-  return acc;
-}, {});
+// Derived helpers (`collections`, `productsByCollection`) and the live `products`
+// list now come from lib/products-db.ts, which reads SQLite. Import from there.
