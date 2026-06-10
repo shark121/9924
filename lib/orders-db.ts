@@ -1,12 +1,10 @@
-import type { DatabaseSync } from "node:sqlite";
 import type Stripe from "stripe";
-import { getDb as getSharedDb, ensureColumn } from "@/lib/db";
+import { query } from "@/lib/db";
 
-// Persistent order store backed by SQLite (Node's built-in `node:sqlite`).
-// Every successful order is written here from the Stripe webhook, capturing the
-// amounts, line items, and full shipping address so we have a durable record
-// independent of the Stripe dashboard. The admin UI adds fulfillment and refund
-// tracking on top via the columns added by the migration below.
+// Persistent order store backed by Neon Postgres. Every successful order is
+// written here from the Stripe webhook, capturing amounts, line items, and the
+// full shipping address so we have a durable record independent of Stripe. The
+// admin UI adds fulfillment and refund tracking via the columns below.
 
 export type FulfillmentStatus =
   | "unfulfilled"
@@ -15,50 +13,43 @@ export type FulfillmentStatus =
   | "delivered"
   | "cancelled";
 
-let _ready = false;
+let _ready: Promise<void> | null = null;
 
-function getDb(): DatabaseSync {
-  const db = getSharedDb();
-  if (_ready) return db;
-
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS orders (
-      payment_intent_id   TEXT PRIMARY KEY,
-      created_at          TEXT NOT NULL,
-      status              TEXT NOT NULL,
-      email               TEXT,
-      currency            TEXT NOT NULL,
-      amount_cents        INTEGER NOT NULL,
-      subtotal_cents      INTEGER,
-      tax_cents           INTEGER,
-      shipping_cents      INTEGER,
-      shipping_service    TEXT,
-      items               TEXT,
-      ship_name           TEXT,
-      ship_phone          TEXT,
-      ship_line1          TEXT,
-      ship_line2          TEXT,
-      ship_city           TEXT,
-      ship_state          TEXT,
-      ship_postal_code    TEXT,
-      ship_country        TEXT,
-      raw                 TEXT NOT NULL
-    )
-  `);
-
-  // Additive migration so databases created before the admin UI keep working.
-  ensureColumn(db, "orders", "fulfillment_status",
-    "fulfillment_status TEXT NOT NULL DEFAULT 'unfulfilled'");
-  ensureColumn(db, "orders", "tracking_number", "tracking_number TEXT");
-  ensureColumn(db, "orders", "tracking_carrier", "tracking_carrier TEXT");
-  ensureColumn(db, "orders", "refund_status", "refund_status TEXT");
-  ensureColumn(db, "orders", "refunded_cents",
-    "refunded_cents INTEGER NOT NULL DEFAULT 0");
-  ensureColumn(db, "orders", "refund_id", "refund_id TEXT");
-  ensureColumn(db, "orders", "updated_at", "updated_at TEXT");
-
-  _ready = true;
-  return db;
+function ensure(): Promise<void> {
+  if (!_ready) {
+    _ready = query(`
+      CREATE TABLE IF NOT EXISTS orders (
+        payment_intent_id   text PRIMARY KEY,
+        created_at          text NOT NULL,
+        status              text NOT NULL,
+        email               text,
+        currency            text NOT NULL,
+        amount_cents        integer NOT NULL,
+        subtotal_cents      integer,
+        tax_cents           integer,
+        shipping_cents      integer,
+        shipping_service    text,
+        items               text,
+        ship_name           text,
+        ship_phone          text,
+        ship_line1          text,
+        ship_line2          text,
+        ship_city           text,
+        ship_state          text,
+        ship_postal_code    text,
+        ship_country        text,
+        raw                 text NOT NULL,
+        fulfillment_status  text NOT NULL DEFAULT 'unfulfilled',
+        tracking_number     text,
+        tracking_carrier    text,
+        refund_status       text,
+        refunded_cents      integer NOT NULL DEFAULT 0,
+        refund_id           text,
+        updated_at          text
+      )
+    `).then(() => undefined);
+  }
+  return _ready;
 }
 
 function toInt(value: string | undefined): number | null {
@@ -109,82 +100,87 @@ export interface OrderFilter {
 }
 
 /** Orders newest first, optionally filtered by search text / status. */
-export function listOrders(filter?: OrderFilter): OrderRow[] {
+export async function listOrders(filter?: OrderFilter): Promise<OrderRow[]> {
+  await ensure();
   const where: string[] = [];
   const params: string[] = [];
+  let n = 1;
   if (filter?.q) {
     where.push(
-      "(email LIKE ? OR payment_intent_id LIKE ? OR ship_name LIKE ?)"
+      `(email ILIKE $${n} OR payment_intent_id ILIKE $${n} OR ship_name ILIKE $${n})`
     );
-    const like = `%${filter.q}%`;
-    params.push(like, like, like);
+    params.push(`%${filter.q}%`);
+    n++;
   }
   if (filter?.status) {
-    where.push("status = ?");
+    where.push(`status = $${n++}`);
     params.push(filter.status);
   }
   if (filter?.fulfillment) {
-    where.push("fulfillment_status = ?");
+    where.push(`fulfillment_status = $${n++}`);
     params.push(filter.fulfillment);
   }
   const clause = where.length ? `WHERE ${where.join(" AND ")}` : "";
-  return getDb()
-    .prepare(
-      `SELECT ${SELECT_COLS} FROM orders ${clause} ORDER BY created_at DESC`
-    )
-    .all(...params) as unknown as OrderRow[];
+  return query<OrderRow>(
+    `SELECT ${SELECT_COLS} FROM orders ${clause} ORDER BY created_at DESC`,
+    params
+  );
 }
 
-export function getOrder(paymentIntentId: string): OrderRow | null {
-  const row = getDb()
-    .prepare(`SELECT ${SELECT_COLS} FROM orders WHERE payment_intent_id = ?`)
-    .get(paymentIntentId) as OrderRow | undefined;
-  return row ?? null;
+export async function getOrder(
+  paymentIntentId: string
+): Promise<OrderRow | null> {
+  await ensure();
+  const rows = await query<OrderRow>(
+    `SELECT ${SELECT_COLS} FROM orders WHERE payment_intent_id = $1`,
+    [paymentIntentId]
+  );
+  return rows[0] ?? null;
 }
 
 /** Update fulfillment status and optional tracking for an order. */
-export function updateFulfillment(
+export async function updateFulfillment(
   paymentIntentId: string,
   patch: {
     status: FulfillmentStatus;
     trackingNumber?: string | null;
     trackingCarrier?: string | null;
   }
-): void {
-  getDb()
-    .prepare(
-      `UPDATE orders SET
-         fulfillment_status = ?, tracking_number = ?, tracking_carrier = ?,
-         updated_at = ?
-       WHERE payment_intent_id = ?`
-    )
-    .run(
+): Promise<void> {
+  await ensure();
+  await query(
+    `UPDATE orders SET
+       fulfillment_status = $1, tracking_number = $2, tracking_carrier = $3,
+       updated_at = $4
+     WHERE payment_intent_id = $5`,
+    [
       patch.status,
       patch.trackingNumber ?? null,
       patch.trackingCarrier ?? null,
       new Date().toISOString(),
-      paymentIntentId
-    );
+      paymentIntentId,
+    ]
+  );
 }
 
 /** Record a Stripe refund against an order. */
-export function recordRefund(
+export async function recordRefund(
   paymentIntentId: string,
   patch: { refundId: string; refundedCents: number; refundStatus: string }
-): void {
-  getDb()
-    .prepare(
-      `UPDATE orders SET
-         refund_id = ?, refunded_cents = ?, refund_status = ?, updated_at = ?
-       WHERE payment_intent_id = ?`
-    )
-    .run(
+): Promise<void> {
+  await ensure();
+  await query(
+    `UPDATE orders SET
+       refund_id = $1, refunded_cents = $2, refund_status = $3, updated_at = $4
+     WHERE payment_intent_id = $5`,
+    [
       patch.refundId,
       patch.refundedCents,
       patch.refundStatus,
       new Date().toISOString(),
-      paymentIntentId
-    );
+      paymentIntentId,
+    ]
+  );
 }
 
 /**
@@ -192,48 +188,46 @@ export function recordRefund(
  * may deliver the same webhook more than once, so we upsert on the intent id
  * and refresh the status/amounts each time.
  */
-export function recordOrder(pi: Stripe.PaymentIntent): void {
-  const db = getDb();
+export async function recordOrder(pi: Stripe.PaymentIntent): Promise<void> {
+  await ensure();
   const shipping = pi.shipping;
   const address = shipping?.address;
   const meta = pi.metadata ?? {};
 
-  db.prepare(
+  await query(
     `INSERT INTO orders (
        payment_intent_id, created_at, status, email, currency, amount_cents,
        subtotal_cents, tax_cents, shipping_cents, shipping_service, items,
        ship_name, ship_phone, ship_line1, ship_line2, ship_city, ship_state,
        ship_postal_code, ship_country, raw
      ) VALUES (
-       ?, ?, ?, ?, ?, ?,
-       ?, ?, ?, ?, ?,
-       ?, ?, ?, ?, ?, ?,
-       ?, ?, ?
+       $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20
      )
-     ON CONFLICT(payment_intent_id) DO UPDATE SET
-       status       = excluded.status,
-       amount_cents = excluded.amount_cents,
-       raw          = excluded.raw`
-  ).run(
-    pi.id,
-    new Date(pi.created * 1000).toISOString(),
-    pi.status,
-    pi.receipt_email ?? null,
-    pi.currency,
-    pi.amount,
-    toInt(meta.subtotal_cents),
-    toInt(meta.tax_cents),
-    toInt(meta.shipping_cents),
-    meta.shipping_service ?? null,
-    meta.items ?? null,
-    shipping?.name ?? null,
-    shipping?.phone ?? null,
-    address?.line1 ?? null,
-    address?.line2 ?? null,
-    address?.city ?? null,
-    address?.state ?? null,
-    address?.postal_code ?? null,
-    address?.country ?? null,
-    JSON.stringify(pi)
+     ON CONFLICT (payment_intent_id) DO UPDATE SET
+       status       = EXCLUDED.status,
+       amount_cents = EXCLUDED.amount_cents,
+       raw          = EXCLUDED.raw`,
+    [
+      pi.id,
+      new Date(pi.created * 1000).toISOString(),
+      pi.status,
+      pi.receipt_email ?? null,
+      pi.currency,
+      pi.amount,
+      toInt(meta.subtotal_cents),
+      toInt(meta.tax_cents),
+      toInt(meta.shipping_cents),
+      meta.shipping_service ?? null,
+      meta.items ?? null,
+      shipping?.name ?? null,
+      shipping?.phone ?? null,
+      address?.line1 ?? null,
+      address?.line2 ?? null,
+      address?.city ?? null,
+      address?.state ?? null,
+      address?.postal_code ?? null,
+      address?.country ?? null,
+      JSON.stringify(pi),
+    ]
   );
 }

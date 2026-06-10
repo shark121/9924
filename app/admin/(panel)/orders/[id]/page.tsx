@@ -32,7 +32,7 @@ export default async function OrderDetailPage(props: {
   params: Promise<{ id: string }>;
 }) {
   const { id } = await props.params;
-  const order = getOrder(id);
+  const order = await getOrder(id);
   if (!order) notFound();
 
   const items = parseItems(order.items);

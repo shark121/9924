@@ -18,7 +18,7 @@ export default async function OrdersPage(props: {
   searchParams: Promise<{ q?: string; status?: string; fulfillment?: string }>;
 }) {
   const sp = await props.searchParams;
-  const orders = listOrders({
+  const orders = await listOrders({
     q: sp.q,
     status: sp.status,
     fulfillment: sp.fulfillment,

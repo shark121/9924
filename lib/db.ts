@@ -1,41 +1,30 @@
-import { DatabaseSync } from "node:sqlite";
-import { mkdirSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 
-// Single shared SQLite handle for the whole app. Orders, products, and settings
-// all live in one file (default `data/orders.db`, override with ORDERS_DB_PATH)
-// so there is one volume to mount in production and one connection to manage.
-// WAL mode lets storefront reads and admin writes coexist.
+// Neon serverless Postgres over HTTP — works on Vercel's read-only/ephemeral
+// filesystem (unlike a local SQLite file) and persists across instances.
+// Set DATABASE_URL to your Neon connection string (locally in .env.local, and
+// in the Vercel project env). Use `sql.query(text, params)` with $1, $2 …
+// placeholders for parameterized queries.
 
-let _db: DatabaseSync | null = null;
+let _sql: NeonQueryFunction<false, false> | null = null;
 
-export function getDb(): DatabaseSync {
-  if (_db) return _db;
-
-  const dbPath =
-    process.env.ORDERS_DB_PATH || join(process.cwd(), "data", "orders.db");
-  mkdirSync(dirname(dbPath), { recursive: true });
-
-  const db = new DatabaseSync(dbPath);
-  db.exec("PRAGMA journal_mode = WAL");
-  _db = db;
-  return _db;
+export function sql(): NeonQueryFunction<false, false> {
+  if (_sql) return _sql;
+  const url = process.env.DATABASE_URL;
+  if (!url) {
+    throw new Error(
+      "DATABASE_URL is not set — point it at your Neon Postgres connection string."
+    );
+  }
+  _sql = neon(url);
+  return _sql;
 }
 
-/**
- * Add a column to an existing table if it isn't already present. Idempotent, so
- * it's safe to run on every boot against databases created by older versions.
- */
-export function ensureColumn(
-  db: DatabaseSync,
-  table: string,
-  column: string,
-  ddl: string
-): void {
-  const cols = db.prepare(`PRAGMA table_info(${table})`).all() as {
-    name: string;
-  }[];
-  if (!cols.some((c) => c.name === column)) {
-    db.exec(`ALTER TABLE ${table} ADD COLUMN ${ddl}`);
-  }
+/** Run a parameterized query and return the rows. */
+export async function query<T = Record<string, unknown>>(
+  text: string,
+  params: unknown[] = []
+): Promise<T[]> {
+  const rows = await sql().query(text, params);
+  return rows as T[];
 }

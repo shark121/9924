@@ -13,7 +13,7 @@ export async function loginAction(
   const password = String(formData.get("password") ?? "");
   const from = String(formData.get("from") ?? "/admin");
 
-  if (!passwordMatches(password)) {
+  if (!(await passwordMatches(password))) {
     return { error: "Incorrect password." };
   }
 

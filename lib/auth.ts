@@ -5,7 +5,6 @@ import {
   scryptSync,
   randomBytes,
 } from "node:crypto";
-import { getSetting } from "@/lib/settings-db";
 
 // Stateless, signed session for the single admin user. The cookie value is
 // `base64url(payload).hmac` — no DB lookup needed to verify, so the `proxy`
@@ -76,8 +75,11 @@ function verifyHashed(password: string, stored: string): boolean {
  * Check a login password. A password override stored in the DB (set from the
  * admin Settings page) takes precedence; otherwise fall back to ADMIN_PASSWORD.
  */
-export function passwordMatches(provided: string): boolean {
-  const override = getSetting(PW_OVERRIDE_KEY);
+export async function passwordMatches(provided: string): Promise<boolean> {
+  // Lazy import so proxy.ts (which only needs verifySessionToken) doesn't pull
+  // the database driver into its bundle.
+  const { getSetting } = await import("@/lib/settings-db");
+  const override = await getSetting(PW_OVERRIDE_KEY);
   if (override) return verifyHashed(provided, override);
 
   const expected = process.env.ADMIN_PASSWORD;

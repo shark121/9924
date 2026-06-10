@@ -31,9 +31,11 @@ function StatCard({ label, value }: { label: string; value: string }) {
   );
 }
 
-export default function DashboardPage() {
-  const orders = listOrders();
-  const products = listProducts({ includeArchived: true });
+export default async function DashboardPage() {
+  const [orders, products] = await Promise.all([
+    listOrders(),
+    listProducts({ includeArchived: true }),
+  ]);
 
   const succeeded = orders.filter((o) => o.status === "succeeded");
   const netRevenue = succeeded.reduce(

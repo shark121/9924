@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    assertValidItems(body.items);
+    await assertValidItems(body.items);
   } catch (e) {
     return Response.json({ error: String(e) }, { status: 400 });
   }
@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
   // Price the cart server-side — never trust client amounts.
   let subtotalCents = 0;
   const productMap = new Map(
-    listProducts({ includeArchived: true }).map((p) => [p.id, p])
+    (await listProducts({ includeArchived: true })).map((p) => [p.id, p])
   );
   const lineMeta: { name: string; size: string; qty: number }[] = [];
   for (const item of body.items) {

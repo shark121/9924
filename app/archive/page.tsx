@@ -3,6 +3,6 @@ import ArchiveClient from "./ArchiveClient";
 
 export const dynamic = "force-dynamic";
 
-export default function ArchivePage() {
-  return <ArchiveClient products={listProducts()} />;
+export default async function ArchivePage() {
+  return <ArchiveClient products={await listProducts()} />;
 }

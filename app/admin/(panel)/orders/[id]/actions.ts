@@ -34,7 +34,7 @@ export async function setFulfillmentAction(
   const trackingCarrier =
     String(formData.get("tracking_carrier") ?? "").trim() || null;
 
-  updateFulfillment(id, { status, trackingNumber, trackingCarrier });
+  await updateFulfillment(id, { status, trackingNumber, trackingCarrier });
   revalidatePath(`/admin/orders/${id}`);
   return { ok: true };
 }
@@ -45,7 +45,7 @@ export async function refundOrderAction(
 ): Promise<ActionState> {
   await requireAdmin();
   const id = String(formData.get("id") ?? "");
-  const order = getOrder(id);
+  const order = await getOrder(id);
   if (!order) return { error: "Order not found" };
 
   const remaining = order.amount_cents - (order.refunded_cents ?? 0);
@@ -77,7 +77,7 @@ export async function refundOrderAction(
   const refundedTotal = (order.refunded_cents ?? 0) + refundedAmount;
   const refundStatus =
     refundedTotal >= order.amount_cents ? "full" : "partial";
-  recordRefund(id, { refundId, refundedCents: refundedTotal, refundStatus });
+  await recordRefund(id, { refundId, refundedCents: refundedTotal, refundStatus });
 
   revalidatePath(`/admin/orders/${id}`);
   return { ok: true };

@@ -19,13 +19,13 @@ export async function changePasswordAction(
   const next = String(formData.get("next") ?? "");
   const confirm = String(formData.get("confirm") ?? "");
 
-  if (!passwordMatches(current))
+  if (!(await passwordMatches(current)))
     return { error: "Current password is incorrect" };
   if (next.length < 8)
     return { error: "New password must be at least 8 characters" };
   if (next !== confirm) return { error: "New passwords do not match" };
 
-  setSetting(PW_OVERRIDE_KEY, hashPassword(next));
+  await setSetting(PW_OVERRIDE_KEY, hashPassword(next));
   return { ok: true };
 }
 
@@ -44,7 +44,7 @@ export async function updateShippingAction(
   if (origin.length !== 2)
     return { error: "Origin must be a 2-letter ISO country code" };
 
-  setSetting("ship_intl_flat_usd", String(intl));
-  setSetting("ship_from_country", origin);
+  await setSetting("ship_intl_flat_usd", String(intl));
+  await setSetting("ship_from_country", origin);
   return { ok: true };
 }

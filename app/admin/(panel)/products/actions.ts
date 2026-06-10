@@ -58,7 +58,7 @@ export async function createProductAction(
   const parsed = parseForm(formData);
   if ("error" in parsed) return { error: parsed.error };
   try {
-    createProduct(parsed);
+    await createProduct(parsed);
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Could not create product" };
   }
@@ -76,7 +76,7 @@ export async function updateProductAction(
   const parsed = parseForm(formData);
   if ("error" in parsed) return { error: parsed.error };
   try {
-    updateProduct(id, parsed);
+    await updateProduct(id, parsed);
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Could not update product" };
   }
@@ -88,6 +88,6 @@ export async function archiveProductAction(formData: FormData): Promise<void> {
   await requireAdmin();
   const id = String(formData.get("id") ?? "");
   const archived = String(formData.get("archived") ?? "") === "true";
-  if (id) archiveProduct(id, archived);
+  if (id) await archiveProduct(id, archived);
   revalidateStorefront();
 }

@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
     case "payment_intent.succeeded": {
       const pi = event.data.object;
       try {
-        recordOrder(pi);
+        await recordOrder(pi);
       } catch (err) {
         // Don't fail the webhook (Stripe would retry) if persistence hiccups —
         // log it so the order can be recovered from the Stripe dashboard.

@@ -7,8 +7,8 @@ import { archiveProductAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
-export default function ProductsPage() {
-  const products = listProductsAdmin();
+export default async function ProductsPage() {
+  const products = await listProductsAdmin();
 
   return (
     <div className="mx-auto max-w-5xl">

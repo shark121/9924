@@ -1,45 +1,45 @@
-import { getDb } from "@/lib/db";
+import { query } from "@/lib/db";
 
-// Simple key/value settings store, shared SQLite file. Holds runtime-editable
-// configuration that would otherwise require a redeploy: the admin password
-// override (see lib/auth.ts) and the shipping policy (see lib/shipping.ts).
+// Key/value settings store (Neon Postgres). Holds runtime-editable config that
+// would otherwise need a redeploy: the admin password override (see lib/auth.ts)
+// and the shipping policy (see lib/shipping.ts).
 
-let _ready = false;
+let _ready: Promise<void> | null = null;
 
-function db() {
-  const d = getDb();
+function ensure(): Promise<void> {
   if (!_ready) {
-    d.exec(`
-      CREATE TABLE IF NOT EXISTS settings (
-        key   TEXT PRIMARY KEY,
-        value TEXT NOT NULL
-      )
-    `);
-    _ready = true;
+    _ready = query(
+      `CREATE TABLE IF NOT EXISTS settings (
+         key   text PRIMARY KEY,
+         value text NOT NULL
+       )`
+    ).then(() => undefined);
   }
-  return d;
+  return _ready;
 }
 
-export function getSetting(key: string): string | null {
-  const row = db()
-    .prepare(`SELECT value FROM settings WHERE key = ?`)
-    .get(key) as { value: string } | undefined;
-  return row?.value ?? null;
+export async function getSetting(key: string): Promise<string | null> {
+  await ensure();
+  const rows = await query<{ value: string }>(
+    `SELECT value FROM settings WHERE key = $1`,
+    [key]
+  );
+  return rows[0]?.value ?? null;
 }
 
-export function setSetting(key: string, value: string): void {
-  db()
-    .prepare(
-      `INSERT INTO settings (key, value) VALUES (?, ?)
-       ON CONFLICT(key) DO UPDATE SET value = excluded.value`
-    )
-    .run(key, value);
+export async function setSetting(key: string, value: string): Promise<void> {
+  await ensure();
+  await query(
+    `INSERT INTO settings (key, value) VALUES ($1, $2)
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+    [key, value]
+  );
 }
 
-export function getAllSettings(): Record<string, string> {
-  const rows = db().prepare(`SELECT key, value FROM settings`).all() as {
-    key: string;
-    value: string;
-  }[];
+export async function getAllSettings(): Promise<Record<string, string>> {
+  await ensure();
+  const rows = await query<{ key: string; value: string }>(
+    `SELECT key, value FROM settings`
+  );
   return Object.fromEntries(rows.map((r) => [r.key, r.value]));
 }

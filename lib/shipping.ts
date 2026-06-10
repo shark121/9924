@@ -45,17 +45,19 @@ export type NormalizedRate = {
 // policy, not the carrier's number. Values are read per-call so the admin
 // Settings page can change them (DB override) without a redeploy, falling back
 // to env, then to defaults.
-export function getShippingPolicy(): {
+export async function getShippingPolicy(): Promise<{
   intlFlatCents: number;
   originCountry: string;
-} {
+}> {
+  const [intlSetting, originSetting] = await Promise.all([
+    getSetting("ship_intl_flat_usd"),
+    getSetting("ship_from_country"),
+  ]);
   const intlFlatUsd = Number(
-    getSetting("ship_intl_flat_usd") ?? process.env.SHIP_INTL_FLAT_USD ?? "30"
+    intlSetting ?? process.env.SHIP_INTL_FLAT_USD ?? "30"
   );
   const originCountry = (
-    getSetting("ship_from_country") ??
-    process.env.SHIP_FROM_COUNTRY ??
-    "US"
+    originSetting ?? process.env.SHIP_FROM_COUNTRY ?? "US"
   ).toUpperCase();
   return {
     intlFlatCents: Math.round((Number.isFinite(intlFlatUsd) ? intlFlatUsd : 30) * 100),
@@ -64,20 +66,21 @@ export function getShippingPolicy(): {
 }
 
 // 0 for domestic, the flat international fee for everywhere else.
-function shippingCentsFor(country: string): number {
-  const { intlFlatCents, originCountry } = getShippingPolicy();
+async function shippingCentsFor(country: string): Promise<number> {
+  const { intlFlatCents, originCountry } = await getShippingPolicy();
   return country.toUpperCase() === originCountry ? 0 : intlFlatCents;
 }
 
 // A guaranteed selectable option when no carrier quote comes back, so checkout
-// never dead-ends. Priced by the same policy as the live rates. Stable token so
-// the payment-intent re-price (getRateByToken) resolves to the same rate.
-function flatFallbackRate(country: string): NormalizedRate {
+// never dead-ends. Priced by the same policy as the live rates (caller resolves
+// the policy once and passes the cents). Stable token so the payment-intent
+// re-price (getRateByToken) resolves to the same rate.
+function flatFallbackRate(amountCents: number): NormalizedRate {
   return {
     token: "flat_standard",
     name: "Standard Shipping",
     provider: "Standard",
-    amountCents: shippingCentsFor(country),
+    amountCents,
     currency: "USD",
     estimatedDays: null,
   };
@@ -111,11 +114,11 @@ export function totalQuantity(items: IncomingItem[]): number {
 }
 
 // Validate items against the catalog. Throws a user-safe string on bad input.
-export function assertValidItems(items: IncomingItem[]): void {
+export async function assertValidItems(items: IncomingItem[]): Promise<void> {
   // Include archived products so a cart formed before a product was archived can
   // still complete checkout.
   const map = new Map(
-    listProducts({ includeArchived: true }).map((p) => [p.id, p])
+    (await listProducts({ includeArchived: true })).map((p) => [p.id, p])
   );
   for (const it of items) {
     const p = map.get(it.productId);
@@ -199,13 +202,16 @@ export async function getRatesWithDebug(
     messages: [],
   };
 
+  // Resolve the shipping policy once for this request.
+  const policyCents = await shippingCentsFor(addressTo.country);
+
   // No token configured — don't dead-end checkout; use the flat fallback.
   if (!SHIPPO_TOKEN) {
     const msg = "SHIPPO_API_TOKEN not set on the server — using flat fallback.";
     console.warn(`[shipping] ${msg}`);
     debug.usedFallback = true;
     debug.messages.push(msg);
-    return { rates: [flatFallbackRate(addressTo.country)], debug };
+    return { rates: [flatFallbackRate(policyCents)], debug };
   }
 
   const qty = Math.max(1, totalQuantity(items));
@@ -245,7 +251,7 @@ export async function getRatesWithDebug(
       e instanceof Error ? e.message : String(e)
     }`;
     debug.messages.push(debug.error);
-    return { rates: [flatFallbackRate(addressTo.country)], debug };
+    return { rates: [flatFallbackRate(policyCents)], debug };
   }
 
   debug.httpStatus = res.status;
@@ -258,7 +264,7 @@ export async function getRatesWithDebug(
     debug.usedFallback = true;
     debug.error = `Shippo HTTP ${res.status}: ${detail.slice(0, 300)}`;
     debug.messages.push(debug.error);
-    return { rates: [flatFallbackRate(addressTo.country)], debug };
+    return { rates: [flatFallbackRate(policyCents)], debug };
   }
 
   const data = (await res.json()) as {
@@ -291,7 +297,7 @@ export async function getRatesWithDebug(
       provider: r.provider,
       // Ignore the carrier's quoted amount; charge by policy (free domestic,
       // flat international) based on the destination country.
-      amountCents: shippingCentsFor(addressTo.country),
+      amountCents: policyCents,
       currency: (r.currency ?? "USD").toUpperCase(),
       estimatedDays: r.estimated_days ?? null,
     }))
@@ -315,7 +321,7 @@ export async function getRatesWithDebug(
       `Destination: ${JSON.stringify(debug.destination)}.` +
       (debug.messages.length ? ` Messages: ${debug.messages.join(" | ")}` : "")
   );
-  return { rates: [flatFallbackRate(addressTo.country)], debug };
+  return { rates: [flatFallbackRate(policyCents)], debug };
 }
 
 // Fetch live rate quotes for a destination + cart. Returns cheapest-first.

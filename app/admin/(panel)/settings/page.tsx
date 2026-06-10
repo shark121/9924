@@ -5,9 +5,12 @@ import { PasswordForm, ShippingForm } from "./SettingsForms";
 
 export const dynamic = "force-dynamic";
 
-export default function SettingsPage() {
-  const policy = getShippingPolicy();
-  const hasOverride = !!getSetting(PW_OVERRIDE_KEY);
+export default async function SettingsPage() {
+  const [policy, override] = await Promise.all([
+    getShippingPolicy(),
+    getSetting(PW_OVERRIDE_KEY),
+  ]);
+  const hasOverride = !!override;
 
   return (
     <div className="mx-auto max-w-3xl">

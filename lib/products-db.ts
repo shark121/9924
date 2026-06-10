@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { getDb } from "@/lib/db";
+import { query } from "@/lib/db";
 import { SEED_PRODUCTS, type Product, type ProductCategory } from "@/lib/data";
 
-// SQLite-backed product catalog. Prices are stored as INTEGER cents to match the
-// orders table and avoid float drift; the public `Product` type keeps `price` in
-// dollars (a number), so every storefront consumer sees the same shape it always
-// did. `images` and `sizes` are JSON-encoded string arrays.
+// Neon Postgres-backed product catalog. Prices are stored as INTEGER cents to
+// match the orders table; the public `Product` type keeps `price` in dollars, so
+// storefront consumers see the same shape as before. `images`/`sizes` are stored
+// as JSON-encoded text arrays.
 
 export interface ProductRow {
   id: string;
@@ -22,31 +22,31 @@ export interface ProductRow {
   updated_at: string;
 }
 
-let _ready = false;
+let _ready: Promise<void> | null = null;
 
-function db() {
-  const d = getDb();
+function ensure(): Promise<void> {
   if (!_ready) {
-    d.exec(`
-      CREATE TABLE IF NOT EXISTS products (
-        id           TEXT PRIMARY KEY,
-        sku          TEXT NOT NULL,
-        name         TEXT NOT NULL,
-        price_cents  INTEGER NOT NULL,
-        description  TEXT NOT NULL DEFAULT '',
-        images       TEXT NOT NULL DEFAULT '[]',
-        sizes        TEXT NOT NULL DEFAULT '[]',
-        category     TEXT NOT NULL,
-        collection   TEXT NOT NULL,
-        archived     INTEGER NOT NULL DEFAULT 0,
-        created_at   TEXT NOT NULL,
-        updated_at   TEXT NOT NULL
-      )
-    `);
-    _ready = true;
-    seedProductsIfEmpty();
+    _ready = (async () => {
+      await query(`
+        CREATE TABLE IF NOT EXISTS products (
+          id           text PRIMARY KEY,
+          sku          text NOT NULL,
+          name         text NOT NULL,
+          price_cents  integer NOT NULL,
+          description  text NOT NULL DEFAULT '',
+          images       text NOT NULL DEFAULT '[]',
+          sizes        text NOT NULL DEFAULT '[]',
+          category     text NOT NULL,
+          collection   text NOT NULL,
+          archived     integer NOT NULL DEFAULT 0,
+          created_at   text NOT NULL,
+          updated_at   text NOT NULL
+        )
+      `);
+      await seedProductsIfEmpty();
+    })();
   }
-  return d;
+  return _ready;
 }
 
 function parseList(raw: string): string[] {
@@ -84,45 +84,45 @@ export interface ProductInput {
 }
 
 /** Seed the catalog from lib/data.ts the first time the table is empty. */
-export function seedProductsIfEmpty(): void {
-  const d = getDb();
-  const { c } = d.prepare(`SELECT COUNT(*) AS c FROM products`).get() as {
-    c: number;
-  };
-  if (c > 0) return;
+export async function seedProductsIfEmpty(): Promise<void> {
+  const rows = await query<{ c: string }>(`SELECT COUNT(*)::int AS c FROM products`);
+  if (Number(rows[0]?.c ?? 0) > 0) return;
 
   const now = new Date().toISOString();
-  const insert = d.prepare(
-    `INSERT INTO products (
-       id, sku, name, price_cents, description, images, sizes,
-       category, collection, archived, created_at, updated_at
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`
-  );
   for (const p of SEED_PRODUCTS) {
-    insert.run(
-      p.id,
-      p.sku,
-      p.name,
-      Math.round(p.price * 100),
-      p.description,
-      JSON.stringify(p.images),
-      JSON.stringify(p.sizes),
-      p.category,
-      p.collection,
-      now,
-      now
+    await query(
+      `INSERT INTO products (
+         id, sku, name, price_cents, description, images, sizes,
+         category, collection, archived, created_at, updated_at
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,0,$10,$11)
+       ON CONFLICT (id) DO NOTHING`,
+      [
+        p.id,
+        p.sku,
+        p.name,
+        Math.round(p.price * 100),
+        p.description,
+        JSON.stringify(p.images),
+        JSON.stringify(p.sizes),
+        p.category,
+        p.collection,
+        now,
+        now,
+      ]
     );
   }
 }
 
 /** All products, newest first. Excludes archived unless asked. */
-export function listProducts(opts?: { includeArchived?: boolean }): Product[] {
+export async function listProducts(opts?: {
+  includeArchived?: boolean;
+}): Promise<Product[]> {
+  await ensure();
   const where = opts?.includeArchived ? "" : "WHERE archived = 0";
-  return (
-    db()
-      .prepare(`SELECT * FROM products ${where} ORDER BY created_at DESC`)
-      .all() as unknown as ProductRow[]
-  ).map(rowToProduct);
+  const rows = await query<ProductRow>(
+    `SELECT * FROM products ${where} ORDER BY created_at DESC`
+  );
+  return rows.map(rowToProduct);
 }
 
 export interface AdminProduct extends Product {
@@ -130,52 +130,56 @@ export interface AdminProduct extends Product {
 }
 
 /** All products including archived, with the archived flag — for the admin UI. */
-export function listProductsAdmin(): AdminProduct[] {
-  return (
-    db()
-      .prepare(`SELECT * FROM products ORDER BY created_at DESC`)
-      .all() as unknown as ProductRow[]
-  ).map((r) => ({ ...rowToProduct(r), archived: r.archived === 1 }));
+export async function listProductsAdmin(): Promise<AdminProduct[]> {
+  await ensure();
+  const rows = await query<ProductRow>(
+    `SELECT * FROM products ORDER BY created_at DESC`
+  );
+  return rows.map((r) => ({ ...rowToProduct(r), archived: r.archived === 1 }));
 }
 
-export function getProduct(id: string): Product | null {
-  const row = db()
-    .prepare(`SELECT * FROM products WHERE id = ?`)
-    .get(id) as ProductRow | undefined;
-  return row ? rowToProduct(row) : null;
+export async function getProduct(id: string): Promise<Product | null> {
+  await ensure();
+  const rows = await query<ProductRow>(`SELECT * FROM products WHERE id = $1`, [
+    id,
+  ]);
+  return rows[0] ? rowToProduct(rows[0]) : null;
 }
 
 /** Distinct collections across active products, in first-seen order. */
-export function getCollections(): string[] {
-  return [...new Set(listProducts().map((p) => p.collection))];
+export async function getCollections(): Promise<string[]> {
+  return [...new Set((await listProducts()).map((p) => p.collection))];
 }
 
-export function getProductsByCollection(): Record<string, Product[]> {
-  return listProducts().reduce<Record<string, Product[]>>((acc, p) => {
+export async function getProductsByCollection(): Promise<
+  Record<string, Product[]>
+> {
+  return (await listProducts()).reduce<Record<string, Product[]>>((acc, p) => {
     (acc[p.collection] ??= []).push(p);
     return acc;
   }, {});
 }
 
-function skuExists(sku: string, exceptId?: string): boolean {
-  const row = db()
-    .prepare(`SELECT id FROM products WHERE sku = ?`)
-    .get(sku) as { id: string } | undefined;
-  return !!row && row.id !== exceptId;
+async function skuExists(sku: string, exceptId?: string): Promise<boolean> {
+  const rows = await query<{ id: string }>(
+    `SELECT id FROM products WHERE sku = $1`,
+    [sku]
+  );
+  return !!rows[0] && rows[0].id !== exceptId;
 }
 
-export function createProduct(input: ProductInput): Product {
-  if (skuExists(input.sku)) throw new Error(`SKU "${input.sku}" already exists`);
+export async function createProduct(input: ProductInput): Promise<Product> {
+  await ensure();
+  if (await skuExists(input.sku))
+    throw new Error(`SKU "${input.sku}" already exists`);
   const id = `prod_${randomUUID().slice(0, 8)}`;
   const now = new Date().toISOString();
-  db()
-    .prepare(
-      `INSERT INTO products (
-         id, sku, name, price_cents, description, images, sizes,
-         category, collection, archived, created_at, updated_at
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`
-    )
-    .run(
+  await query(
+    `INSERT INTO products (
+       id, sku, name, price_cents, description, images, sizes,
+       category, collection, archived, created_at, updated_at
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,0,$10,$11)`,
+    [
       id,
       input.sku,
       input.name,
@@ -186,23 +190,26 @@ export function createProduct(input: ProductInput): Product {
       input.category,
       input.collection,
       now,
-      now
-    );
-  return getProduct(id)!;
+      now,
+    ]
+  );
+  return (await getProduct(id))!;
 }
 
-export function updateProduct(id: string, input: ProductInput): Product {
-  if (!getProduct(id)) throw new Error("Product not found");
-  if (skuExists(input.sku, id))
+export async function updateProduct(
+  id: string,
+  input: ProductInput
+): Promise<Product> {
+  await ensure();
+  if (!(await getProduct(id))) throw new Error("Product not found");
+  if (await skuExists(input.sku, id))
     throw new Error(`SKU "${input.sku}" already exists`);
-  db()
-    .prepare(
-      `UPDATE products SET
-         sku = ?, name = ?, price_cents = ?, description = ?, images = ?,
-         sizes = ?, category = ?, collection = ?, updated_at = ?
-       WHERE id = ?`
-    )
-    .run(
+  await query(
+    `UPDATE products SET
+       sku = $1, name = $2, price_cents = $3, description = $4, images = $5,
+       sizes = $6, category = $7, collection = $8, updated_at = $9
+     WHERE id = $10`,
+    [
       input.sku,
       input.name,
       Math.round(input.price * 100),
@@ -212,14 +219,17 @@ export function updateProduct(id: string, input: ProductInput): Product {
       input.category,
       input.collection,
       new Date().toISOString(),
-      id
-    );
-  return getProduct(id)!;
+      id,
+    ]
+  );
+  return (await getProduct(id))!;
 }
 
 /** Soft delete: orders and in-flight carts may still reference the product. */
-export function archiveProduct(id: string, archived = true): void {
-  db()
-    .prepare(`UPDATE products SET archived = ?, updated_at = ? WHERE id = ?`)
-    .run(archived ? 1 : 0, new Date().toISOString(), id);
+export async function archiveProduct(id: string, archived = true): Promise<void> {
+  await ensure();
+  await query(
+    `UPDATE products SET archived = $1, updated_at = $2 WHERE id = $3`,
+    [archived ? 1 : 0, new Date().toISOString(), id]
+  );
 }

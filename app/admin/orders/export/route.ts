@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
   }
 
   const { searchParams } = new URL(request.url);
-  const orders = listOrders({
+  const orders = await listOrders({
     q: searchParams.get("q") ?? undefined,
     fulfillment: searchParams.get("fulfillment") ?? undefined,
     status: searchParams.get("status") ?? undefined,

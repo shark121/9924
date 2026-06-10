@@ -3,11 +3,15 @@ import CollectionsClient from "./CollectionsClient";
 
 export const dynamic = "force-dynamic";
 
-export default function CollectionsPage() {
+export default async function CollectionsPage() {
+  const [collections, productsByCollection] = await Promise.all([
+    getCollections(),
+    getProductsByCollection(),
+  ]);
   return (
     <CollectionsClient
-      collections={getCollections()}
-      productsByCollection={getProductsByCollection()}
+      collections={collections}
+      productsByCollection={productsByCollection}
     />
   );
 }
