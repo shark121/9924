@@ -1,13 +1,11 @@
 import { type NextRequest } from "next/server";
-import { randomUUID } from "node:crypto";
-import { writeFile, mkdir } from "node:fs/promises";
-import { join, extname } from "node:path";
 import { getSession } from "@/lib/admin-session";
+import { saveImage } from "@/lib/images-db";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const MAX_BYTES = 8 * 1024 * 1024; // 8 MB
+const MAX_BYTES = 5 * 1024 * 1024; // 5 MB (base64-encoded into Postgres)
 const ALLOWED = new Set([
   "image/jpeg",
   "image/png",
@@ -15,17 +13,9 @@ const ALLOWED = new Set([
   "image/avif",
   "image/gif",
 ]);
-const EXT_BY_TYPE: Record<string, string> = {
-  "image/jpeg": ".jpg",
-  "image/png": ".png",
-  "image/webp": ".webp",
-  "image/avif": ".avif",
-  "image/gif": ".gif",
-};
 
-// Accepts a single image file and stores it under public/uploads, returning the
-// public URL to save on the product. Self-hosted (writes to disk); not for a
-// read-only serverless filesystem.
+// Accepts a single image file and stores it in Postgres (works on Vercel's
+// read-only filesystem), returning the URL to save on the product.
 export async function POST(request: NextRequest) {
   if (!(await getSession())) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
@@ -50,17 +40,13 @@ export async function POST(request: NextRequest) {
   }
   if (file.size > MAX_BYTES) {
     return Response.json(
-      { error: "File too large (max 8 MB)" },
+      { error: "File too large (max 5 MB)" },
       { status: 413 }
     );
   }
 
-  const ext = EXT_BY_TYPE[file.type] ?? (extname(file.name) || ".bin");
-  const name = `${randomUUID()}${ext}`;
-  const dir = join(process.cwd(), "public", "uploads");
-  await mkdir(dir, { recursive: true });
-  const buffer = Buffer.from(await file.arrayBuffer());
-  await writeFile(join(dir, name), buffer);
+  const base64 = Buffer.from(await file.arrayBuffer()).toString("base64");
+  const id = await saveImage(file.type, base64);
 
-  return Response.json({ url: `/uploads/${name}` });
+  return Response.json({ url: `/api/images/${id}` });
 }
