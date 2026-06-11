@@ -152,16 +152,25 @@ export default function ProductModal({ product, onClose }: ProductModalProps) {
                         onClick={() => !soldOut && setSelectedSize(size)}
                         disabled={soldOut}
                         aria-disabled={soldOut}
+                        aria-label={soldOut ? `${size} — sold out` : size}
                         title={soldOut ? "Sold out" : undefined}
-                        className={`relative h-11 w-11 flex items-center justify-center font-label text-xs font-bold border transition-all ${
+                        className={`relative h-11 w-11 flex items-center justify-center font-label text-xs font-bold border transition-all overflow-hidden ${
                           soldOut
-                            ? "border-black/10 text-black/30 line-through cursor-not-allowed"
+                            ? "border-black/15 text-black/40 cursor-not-allowed bg-black/[0.02]"
                             : selectedSize === size
                               ? "border-black bg-black text-white"
                               : "border-black/10 hover:border-black text-black"
                         }`}
                       >
                         {size}
+                        {soldOut && (
+                          // Diagonal slash — the classic "unavailable" marker,
+                          // far clearer than a strikethrough on a single glyph.
+                          <span
+                            aria-hidden
+                            className="pointer-events-none absolute left-1/2 top-1/2 h-px w-[150%] -translate-x-1/2 -translate-y-1/2 -rotate-45 bg-black/30"
+                          />
+                        )}
                       </button>
                     );
                   })}

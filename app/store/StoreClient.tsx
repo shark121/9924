@@ -5,6 +5,7 @@ import StoreHeader from "./components/StoreHeader";
 import CartDrawer from "./components/CartDrawer";
 import ProductModal from "./components/ProductModal";
 import SiteFooter from "@/app/components/SiteFooter";
+import SizingNote from "@/app/components/SizingNote";
 import { useState, useMemo } from "react";
 import Image from "next/image";
 
@@ -119,6 +120,7 @@ export default function StoreClient({ products }: { products: Product[] }) {
                     ${product.price.toFixed(2)}
                   </span>
                 </div>
+                <SizingNote product={product} className="mt-2" />
               </div>
             ))}
           </div>
