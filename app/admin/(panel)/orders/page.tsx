@@ -5,7 +5,6 @@ import { money, dateTime } from "../_lib/format";
 import OrderFilters from "./OrderFilters";
 
 export const dynamic = "force-dynamic";
-
 const FULFILLMENT_STYLES: Record<string, string> = {
   unfulfilled: "bg-amber-100 text-amber-800",
   processing: "bg-blue-100 text-blue-800",
