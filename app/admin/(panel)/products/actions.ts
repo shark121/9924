@@ -33,6 +33,14 @@ function parseForm(formData: FormData): ProductInput | { error: string } {
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
+  const unavailableRaw = String(formData.get("unavailableSizes") ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  // Only sold-out sizes that are actually part of the size run, deduped.
+  const unavailableSizes = [...new Set(unavailableRaw)].filter((s) =>
+    sizes.includes(s)
+  );
   const images = String(formData.get("images") ?? "")
     .split(/\r?\n/)
     .map((s) => s.trim())
@@ -47,7 +55,17 @@ function parseForm(formData: FormData): ProductInput | { error: string } {
   if (!sizes.length) return { error: "Add at least one size" };
   if (!images.length) return { error: "Add at least one image URL" };
 
-  return { name, sku, category, collection, description, price, sizes, images };
+  return {
+    name,
+    sku,
+    category,
+    collection,
+    description,
+    price,
+    sizes,
+    unavailableSizes,
+    images,
+  };
 }
 
 export async function createProductAction(

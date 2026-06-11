@@ -144,19 +144,27 @@ export default function ProductModal({ product, onClose }: ProductModalProps) {
                   SELECT SIZE
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {product.sizes.map((size) => (
-                    <button
-                      key={size}
-                      onClick={() => setSelectedSize(size)}
-                      className={`h-11 w-11 flex items-center justify-center font-label text-xs font-bold border transition-all ${
-                        selectedSize === size
-                          ? "border-black bg-black text-white"
-                          : "border-black/10 hover:border-black text-black"
-                      }`}
-                    >
-                      {size}
-                    </button>
-                  ))}
+                  {product.sizes.map((size) => {
+                    const soldOut = product.unavailableSizes?.includes(size);
+                    return (
+                      <button
+                        key={size}
+                        onClick={() => !soldOut && setSelectedSize(size)}
+                        disabled={soldOut}
+                        aria-disabled={soldOut}
+                        title={soldOut ? "Sold out" : undefined}
+                        className={`relative h-11 w-11 flex items-center justify-center font-label text-xs font-bold border transition-all ${
+                          soldOut
+                            ? "border-black/10 text-black/30 line-through cursor-not-allowed"
+                            : selectedSize === size
+                              ? "border-black bg-black text-white"
+                              : "border-black/10 hover:border-black text-black"
+                        }`}
+                      >
+                        {size}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 

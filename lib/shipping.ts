@@ -124,6 +124,8 @@ export async function assertValidItems(items: IncomingItem[]): Promise<void> {
     const p = map.get(it.productId);
     if (!p) throw `Unknown product: ${it.productId}`;
     if (!p.sizes.includes(it.size)) throw `Invalid size for ${p.name}`;
+    if (p.unavailableSizes.includes(it.size))
+      throw `${p.name} (${it.size}) is sold out`;
   }
 }
 

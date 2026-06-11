@@ -15,6 +15,7 @@ export interface ProductRow {
   description: string;
   images: string; // JSON string[]
   sizes: string; // JSON string[]
+  unavailable_sizes: string; // JSON string[] — subset of sizes that is sold out
   category: string;
   collection: string;
   archived: number; // 0 | 1
@@ -36,6 +37,7 @@ function ensure(): Promise<void> {
           description  text NOT NULL DEFAULT '',
           images       text NOT NULL DEFAULT '[]',
           sizes        text NOT NULL DEFAULT '[]',
+          unavailable_sizes text NOT NULL DEFAULT '[]',
           category     text NOT NULL,
           collection   text NOT NULL,
           archived     integer NOT NULL DEFAULT 0,
@@ -43,6 +45,10 @@ function ensure(): Promise<void> {
           updated_at   text NOT NULL
         )
       `);
+      // Migrate tables created before sold-out tracking existed.
+      await query(
+        `ALTER TABLE products ADD COLUMN IF NOT EXISTS unavailable_sizes text NOT NULL DEFAULT '[]'`
+      );
       await seedProductsIfEmpty();
     })();
   }
@@ -67,6 +73,7 @@ function rowToProduct(row: ProductRow): Product {
     description: row.description,
     images: parseList(row.images),
     sizes: parseList(row.sizes),
+    unavailableSizes: parseList(row.unavailable_sizes),
     category: row.category as ProductCategory,
     collection: row.collection,
   };
@@ -79,6 +86,7 @@ export interface ProductInput {
   description?: string;
   images: string[];
   sizes: string[];
+  unavailableSizes: string[];
   category: ProductCategory;
   collection: string;
 }
@@ -92,9 +100,9 @@ export async function seedProductsIfEmpty(): Promise<void> {
   for (const p of SEED_PRODUCTS) {
     await query(
       `INSERT INTO products (
-         id, sku, name, price_cents, description, images, sizes,
+         id, sku, name, price_cents, description, images, sizes, unavailable_sizes,
          category, collection, archived, created_at, updated_at
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,0,$10,$11)
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,0,$11,$12)
        ON CONFLICT (id) DO NOTHING`,
       [
         p.id,
@@ -104,6 +112,7 @@ export async function seedProductsIfEmpty(): Promise<void> {
         p.description,
         JSON.stringify(p.images),
         JSON.stringify(p.sizes),
+        JSON.stringify(p.unavailableSizes ?? []),
         p.category,
         p.collection,
         now,
@@ -176,9 +185,9 @@ export async function createProduct(input: ProductInput): Promise<Product> {
   const now = new Date().toISOString();
   await query(
     `INSERT INTO products (
-       id, sku, name, price_cents, description, images, sizes,
+       id, sku, name, price_cents, description, images, sizes, unavailable_sizes,
        category, collection, archived, created_at, updated_at
-     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,0,$10,$11)`,
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,0,$11,$12)`,
     [
       id,
       input.sku,
@@ -187,6 +196,7 @@ export async function createProduct(input: ProductInput): Promise<Product> {
       input.description ?? "",
       JSON.stringify(input.images),
       JSON.stringify(input.sizes),
+      JSON.stringify(input.unavailableSizes),
       input.category,
       input.collection,
       now,
@@ -207,8 +217,9 @@ export async function updateProduct(
   await query(
     `UPDATE products SET
        sku = $1, name = $2, price_cents = $3, description = $4, images = $5,
-       sizes = $6, category = $7, collection = $8, updated_at = $9
-     WHERE id = $10`,
+       sizes = $6, unavailable_sizes = $7, category = $8, collection = $9,
+       updated_at = $10
+     WHERE id = $11`,
     [
       input.sku,
       input.name,
@@ -216,6 +227,7 @@ export async function updateProduct(
       input.description ?? "",
       JSON.stringify(input.images),
       JSON.stringify(input.sizes),
+      JSON.stringify(input.unavailableSizes),
       input.category,
       input.collection,
       new Date().toISOString(),

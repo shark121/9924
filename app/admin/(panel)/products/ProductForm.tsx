@@ -8,6 +8,7 @@ import {
   type ProductFormState,
 } from "./actions";
 import ImageManager from "./ImageManager";
+import SizeEditor from "./SizeEditor";
 
 const CATEGORIES = [
   { value: "polo", label: "Polo" },
@@ -78,14 +79,13 @@ export default function ProductForm({ product }: { product?: Product }) {
         </label>
       </div>
 
-      <label className="flex flex-col gap-1">
-        <span className={labelCls}>Sizes (comma-separated)</span>
-        <input
-          name="sizes"
-          defaultValue={product?.sizes.join(", ") ?? "S, M, L, XL"}
-          className={inputCls}
+      <div className="flex flex-col gap-2">
+        <span className={labelCls}>Sizes</span>
+        <SizeEditor
+          initialSizes={product?.sizes}
+          initialUnavailable={product?.unavailableSizes}
         />
-      </label>
+      </div>
 
       <div className="flex flex-col gap-1">
         <span className={labelCls}>Images</span>
