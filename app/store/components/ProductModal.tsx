@@ -6,6 +6,7 @@ import { X, ChevronLeft, ChevronRight } from "lucide-react";
 import Image from "next/image";
 import { useState, useEffect } from "react";
 import { useCartStore } from "@/store/cartStore";
+import SizingNote from "@/app/components/SizingNote";
 
 interface ProductModalProps {
   product: Product | null;
@@ -135,9 +136,12 @@ export default function ProductModal({ product, onClose }: ProductModalProps) {
                 ${product.price.toFixed(2)}
               </p>
 
-              <p className="font-body text-sm text-on-surface-variant mb-8 sm:mb-10 max-w-sm leading-relaxed">
-                {product.description}
-              </p>
+              <div className="mb-8 sm:mb-10 max-w-sm">
+                <p className="font-body text-sm text-on-surface-variant leading-relaxed">
+                  {product.description}
+                </p>
+                <SizingNote product={product} className="mt-3" />
+              </div>
 
               <div className="mb-6 sm:mb-8">
                 <div className="font-label text-[9px] font-black uppercase tracking-[0.3em] mb-3 sm:mb-4 text-neutral-500">

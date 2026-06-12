@@ -96,7 +96,6 @@ const SELECT_COLS = `payment_intent_id, created_at, status, email, currency, amo
 export interface OrderFilter {
   q?: string; // matches email / payment intent id / ship name
   status?: string; // Stripe payment status
-  fulfillment?: string; // FulfillmentStatus
 }
 
 /** Orders newest first, optionally filtered by search text / status. */
@@ -116,10 +115,6 @@ export async function listOrders(filter?: OrderFilter): Promise<OrderRow[]> {
     where.push(`status = $${n++}`);
     params.push(filter.status);
   }
-  if (filter?.fulfillment) {
-    where.push(`fulfillment_status = $${n++}`);
-    params.push(filter.fulfillment);
-  }
   const clause = where.length ? `WHERE ${where.join(" AND ")}` : "";
   return query<OrderRow>(
     `SELECT ${SELECT_COLS} FROM orders ${clause} ORDER BY created_at DESC`,
@@ -136,51 +131,6 @@ export async function getOrder(
     [paymentIntentId]
   );
   return rows[0] ?? null;
-}
-
-/** Update fulfillment status and optional tracking for an order. */
-export async function updateFulfillment(
-  paymentIntentId: string,
-  patch: {
-    status: FulfillmentStatus;
-    trackingNumber?: string | null;
-    trackingCarrier?: string | null;
-  }
-): Promise<void> {
-  await ensure();
-  await query(
-    `UPDATE orders SET
-       fulfillment_status = $1, tracking_number = $2, tracking_carrier = $3,
-       updated_at = $4
-     WHERE payment_intent_id = $5`,
-    [
-      patch.status,
-      patch.trackingNumber ?? null,
-      patch.trackingCarrier ?? null,
-      new Date().toISOString(),
-      paymentIntentId,
-    ]
-  );
-}
-
-/** Record a Stripe refund against an order. */
-export async function recordRefund(
-  paymentIntentId: string,
-  patch: { refundId: string; refundedCents: number; refundStatus: string }
-): Promise<void> {
-  await ensure();
-  await query(
-    `UPDATE orders SET
-       refund_id = $1, refunded_cents = $2, refund_status = $3, updated_at = $4
-     WHERE payment_intent_id = $5`,
-    [
-      patch.refundId,
-      patch.refundedCents,
-      patch.refundStatus,
-      new Date().toISOString(),
-      paymentIntentId,
-    ]
-  );
 }
 
 /**

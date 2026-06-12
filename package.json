@@ -8,7 +8,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "register:domain": "node scripts/register-payment-domain.mjs"
+    "register:domain": "node scripts/register-payment-domain.mjs",
+    "backfill:orders": "node scripts/backfill-orders.mjs"
   },
   "dependencies": {
     "@googlemaps/js-api-loader": "^2.0.2",

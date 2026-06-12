@@ -34,9 +34,12 @@ export async function POST(request: NextRequest) {
       try {
         await recordOrder(pi);
       } catch (err) {
-        // Don't fail the webhook (Stripe would retry) if persistence hiccups —
-        // log it so the order can be recovered from the Stripe dashboard.
+        // Surface the failure with a non-2xx so Stripe retries (it redelivers
+        // for up to ~3 days). recordOrder upserts on the intent id, so retries
+        // and the success-page fallback are both safe. Swallowing this and
+        // returning 200 silently drops the order — it never appears in admin.
         console.error("[stripe] failed to persist order", pi.id, err);
+        return new Response("Failed to persist order", { status: 500 });
       }
       console.log("[stripe] paid", {
         id: pi.id,

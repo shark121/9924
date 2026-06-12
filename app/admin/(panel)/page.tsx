@@ -44,9 +44,6 @@ export default async function DashboardPage() {
   );
   const orderCount = succeeded.length;
   const aov = orderCount ? Math.round(netRevenue / orderCount) : 0;
-  const unfulfilled = orders.filter(
-    (o) => o.status === "succeeded" && o.fulfillment_status === "unfulfilled"
-  ).length;
 
   // Last 14 days of net revenue (succeeded orders), bucketed by day.
   const DAYS = 14;
@@ -66,6 +63,8 @@ export default async function DashboardPage() {
       buckets.set(key, buckets.get(key)! + (o.amount_cents - (o.refunded_cents ?? 0)));
     }
   }
+
+  console.log("buckets", buckets, "order", order);
   const chart: ChartPoint[] = order.map((key) => ({
     label: key.slice(5).replace("-", "/"),
     cents: buckets.get(key) ?? 0,
@@ -91,11 +90,10 @@ export default async function DashboardPage() {
       </h1>
       <p className="mt-1 text-sm text-neutral-500">Store overview</p>
 
-      <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-3">
         <StatCard label="Net revenue" value={money(netRevenue)} />
         <StatCard label="Orders" value={String(orderCount)} />
         <StatCard label="Avg. order" value={money(aov)} />
-        <StatCard label="Unfulfilled" value={String(unfulfilled)} />
       </div>
 
       <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -155,9 +153,6 @@ export default async function DashboardPage() {
                     {dateTime(o.created_at)}
                   </td>
                   <td className="px-5 py-3 text-neutral-700">{o.email ?? "—"}</td>
-                  <td className="px-5 py-3 text-neutral-500">
-                    {o.fulfillment_status}
-                  </td>
                   <td className="px-5 py-3 text-right font-medium text-neutral-900">
                     {money(o.amount_cents, o.currency)}
                   </td>

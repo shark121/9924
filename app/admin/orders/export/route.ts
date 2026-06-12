@@ -9,7 +9,6 @@ const COLUMNS: (keyof OrderRow)[] = [
   "created_at",
   "payment_intent_id",
   "status",
-  "fulfillment_status",
   "email",
   "currency",
   "amount_cents",
@@ -17,10 +16,6 @@ const COLUMNS: (keyof OrderRow)[] = [
   "tax_cents",
   "shipping_cents",
   "shipping_service",
-  "refunded_cents",
-  "refund_status",
-  "tracking_carrier",
-  "tracking_number",
   "ship_name",
   "ship_phone",
   "ship_line1",
@@ -45,7 +40,6 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const orders = await listOrders({
     q: searchParams.get("q") ?? undefined,
-    fulfillment: searchParams.get("fulfillment") ?? undefined,
     status: searchParams.get("status") ?? undefined,
   });
 

@@ -5,7 +5,6 @@ import SiteNav from "@/app/components/SiteNav";
 import SiteFooter from "@/app/components/SiteFooter";
 import CartDrawer from "@/app/store/components/CartDrawer";
 import ProductModal from "@/app/store/components/ProductModal";
-import SizingNote from "@/app/components/SizingNote";
 import Image from "next/image";
 import { useState } from "react";
 
@@ -154,7 +153,6 @@ export default function CollectionsClient({
                         ${product.price.toFixed(2)}
                       </span>
                     </div>
-                    <SizingNote product={product} className="mt-2" />
                   </div>
                 ))}
               </div>

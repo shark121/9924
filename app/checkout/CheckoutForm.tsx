@@ -481,7 +481,7 @@ export default function CheckoutForm() {
                     src={liveProduct.images[0]}
                     alt={liveProduct.name}
                     fill
-                    className="object-contain grayscale p-2"
+                    className="object-contain p-2"
                     sizes="64px"
                   />
                   <span className="absolute -top-2 -right-2 bg-primary text-on-primary text-[10px] w-5 h-5 flex items-center justify-center font-bold font-label z-10">

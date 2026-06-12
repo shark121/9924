@@ -84,6 +84,15 @@ export default function CheckoutSuccessPage() {
           case "succeeded":
             setView("succeeded");
             clearCart();
+            // Fallback capture so order recording doesn't depend solely on the
+            // Stripe webhook (which can be misconfigured/undelivered in prod).
+            // Idempotent: recordOrder upserts on the PaymentIntent id, so a
+            // webhook delivery for the same order is a harmless no-op.
+            fetch("/api/orders/capture", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ paymentIntentId: paymentIntent.id }),
+            }).catch(() => {});
             break;
           case "processing":
             // Submitted and irreversible from the customer's side — safe to clear.
