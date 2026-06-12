@@ -64,7 +64,6 @@ export default async function DashboardPage() {
     }
   }
 
-  console.log("buckets", buckets, "order", order);
   const chart: ChartPoint[] = order.map((key) => ({
     label: key.slice(5).replace("-", "/"),
     cents: buckets.get(key) ?? 0,
