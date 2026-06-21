@@ -7,6 +7,7 @@ import Image from "next/image";
 import { useState, useEffect } from "react";
 import { useCartStore } from "@/store/cartStore";
 import SizingNote from "@/app/components/SizingNote";
+import SizeChartModal from "@/app/components/SizeChartModal";
 
 interface ProductModalProps {
   product: Product | null;
@@ -16,6 +17,7 @@ interface ProductModalProps {
 export default function ProductModal({ product, onClose }: ProductModalProps) {
   const [selectedSize, setSelectedSize] = useState<string>("");
   const [currentImageIdx, setCurrentImageIdx] = useState(0);
+  const [sizeChartOpen, setSizeChartOpen] = useState(false);
   const addItem = useCartStore((state) => state.addItem);
   const openCart = useCartStore((state) => state.openCart);
 
@@ -141,6 +143,12 @@ export default function ProductModal({ product, onClose }: ProductModalProps) {
                   {product.description}
                 </p>
                 <SizingNote product={product} className="mt-3" />
+                <button
+                  onClick={() => setSizeChartOpen(true)}
+                  className="mt-3 font-body text-[11px] underline underline-offset-2 text-neutral-500 hover:text-black transition-colors"
+                >
+                  Size chart
+                </button>
               </div>
 
               <div className="mb-6 sm:mb-8">
@@ -197,6 +205,8 @@ export default function ProductModal({ product, onClose }: ProductModalProps) {
               )}
             </motion.div>
           </div>
+
+          <SizeChartModal open={sizeChartOpen} onClose={() => setSizeChartOpen(false)} />
         </motion.div>
       )}
     </AnimatePresence>
