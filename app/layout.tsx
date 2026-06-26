@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Space_Grotesk } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -22,6 +23,9 @@ export const metadata: Metadata = {
   title: "9924 | Culture. Creativity. Purpose.",
   description:
     "Built on culture, creativity and purpose. Discover the world of 9924.",
+  verification: {
+    google: "QHPAVcZGHV_TYc8BGY5gY0LsoZTNTnGZjN9CP8MPZZw",
+  },
 };
 
 export default function RootLayout({
@@ -34,7 +38,10 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} ${spaceGrotesk.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        {children}
+        <Analytics />
+      </body>
     </html>
   );
 }
